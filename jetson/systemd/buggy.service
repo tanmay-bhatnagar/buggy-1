@@ -1,0 +1,16 @@
+[Unit]
+Description=Follow-Me Buggy Phase 1 Locomotion
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Restart=on-failure
+User=%i
+WorkingDirectory=/home/%i/follow-me-buggy/jetson
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/bin/python3 -m app.main
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

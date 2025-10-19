@@ -1,0 +1,50 @@
+# Phase-1 locomotion defaults
+# Save as: jetson/config/default.yaml
+
+serial:
+  port: /dev/ttyACM0
+  baud: 115200
+  write_timeout_s: 0.2
+  read_timeout_s: 0.2
+
+pairing_seconds: 8        # Bluetooth pairing window before auto-start
+loop_sleep_s: 0.02        # Main loop sleep (≈50 Hz outer loop)
+
+thresholds_cm:
+  slow_enter: 60          # go SLOW when center < 60 cm
+  slow_exit: 75           # back to FAST when center > 75 cm
+  turn_enter: 35          # leave CRUISE for ARC when < 35 cm
+  turn_exit: 45           # return from ARC when > 45 cm
+  stop_enter: 20          # STOP + BACKOFF when < 20 cm
+  stop_exit: 30           # resume when > 30 cm
+  min_valid: 3            # clamp invalid below this
+  max_valid: 300          # clamp invalid above this
+
+sweep:
+  left_deg: 135           # servo angle limits on a 0–180° scale
+  right_deg: 45
+  step_deg: 15
+  center_trim_deg: 0      # mechanical bias correction
+  samples_per_point: 3    # median over K pings per pose
+
+cadence_ms:
+  rescan_ms: 200          # scan→decide cadence while cruising
+  min_turn_ms: 550        # commit time for ARC/SPIN to avoid thrash
+  backoff_ms: 500         # reverse burst duration
+  stall_timer_ms: 2500    # escape if scene not improving
+  meas_cooldown_ms: 40    # delay between ultrasonic pings
+  servo_settle_ms: 100    # wait after servo move before ping
+
+pwm:
+  fast: 230               # 0–255; used if side PWM is available
+  slow: 150               # else Arduino emulates SLOW via pulsing
+  ramp_ms: 200
+
+watchdog:
+  hb_period_ms: 200       # Jetson → Arduino heartbeat cadence
+  hb_timeout_ms: 600      # Arduino forces STOP if missed
+
+logging:
+  csv_path: logs/phase1_telemetry.csv
+  console_hud: true
+  include_latency_ms: true

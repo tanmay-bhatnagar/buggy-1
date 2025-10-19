@@ -1,0 +1,7 @@
+thresholds_cm:
+  slow_enter: 55
+  slow_exit: 70
+  turn_enter: 30
+  turn_exit: 40
+  stop_enter: 18
+  stop_exit: 28

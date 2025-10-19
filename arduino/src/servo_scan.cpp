@@ -1,0 +1,37 @@
+#include <Arduino.h>
+#include <Servo.h>
+#include "servo_scan.h"
+#include "pins.h"
+#include "config.h"
+
+static Servo g_servo;
+static int g_target_deg = 90;
+static int g_current_deg = 90;
+static unsigned long g_last_move_ms = 0;
+
+void servo_init() {
+  g_servo.attach(SERVO_PIN);
+  g_servo.write(g_current_deg);
+  g_last_move_ms = millis();
+}
+
+void servo_set_target_deg(int deg) {
+  if (deg < 0) deg = 0; if (deg > 180) deg = 180;
+  if (deg != g_target_deg) {
+    g_target_deg = deg;
+    g_servo.write(g_target_deg);
+    g_current_deg = g_target_deg;
+    g_last_move_ms = millis();
+  }
+}
+
+bool servo_is_settled() {
+  return (millis() - g_last_move_ms) >= SERVO_SETTLE_MS && g_current_deg == g_target_deg;
+}
+
+int servo_get_target_deg() { return g_target_deg; }
+int servo_get_current_deg() { return g_current_deg; }
+
+void servo_tick() {
+  // Using direct jumps; no incremental sweep for Phase-1
+}
