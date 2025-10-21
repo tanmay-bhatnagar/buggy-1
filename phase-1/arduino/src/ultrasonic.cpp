@@ -21,6 +21,13 @@ float ultrasonic_measure_cm() {
   if (millis() - g_last_ping_ms < MEAS_COOLDOWN_MS) {
     return g_last_cm;
   }
+  // Ensure servo is settled before pinging to avoid echo contamination
+  extern bool servo_is_settled();
+  if (!servo_is_settled()) {
+    g_last_cm = NAN;
+    g_last_ping_ms = millis();
+    return g_last_cm;
+  }
   digitalWrite(ULTRASONIC_TRIG, LOW);
   delayMicroseconds(2);
   digitalWrite(ULTRASONIC_TRIG, HIGH);

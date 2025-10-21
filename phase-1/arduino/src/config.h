@@ -2,7 +2,7 @@
 
 #define BAUD_RATE 115200
 
-// PWM tiers (side-level). If EN pins are not available, SLOW=FAST fallback.
+// Global PWM tiers (applied on 74HC595 OE; active-LOW so duty is inverted)
 #define PWM_FAST 230
 #define PWM_SLOW 150
 
@@ -12,7 +12,7 @@
 #define HB_TIMEOUT_MS 600
 #define STAT_PERIOD_MS 250
 
-// Pulsed SLOW emulation when no EN pins (ms)
+// Pulsing knobs for ARC inner track (ms)
 #define SLOW_PULSE_ON_MS 40
 #define SLOW_PULSE_OFF_MS 15
 

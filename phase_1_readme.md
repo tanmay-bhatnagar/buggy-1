@@ -33,14 +33,14 @@
 - **Power:** Jetson via USB‑C PD power bank; motors via separate battery pack; UNO linked to Jetson over USB for data (and optionally 5 V power, depending on wiring).
 - **Final motor mapping & polarity:**
   - M1 = Front‑Left, M2 = Rear‑Left, M3 = Rear‑Right, M4 = Front‑Right.
-  - **REV mask:** `{true, false, true, false}` (True = reversed for that motor’s wiring).
+  - **REV mask:** `{false, true, false, true}` (True = reversed; applies M1..M4 in order).
 
-### 2.2 L293D shield “gotcha” (why we’re not doing per‑wheel PWM)
+### 2.2 L293D shield + 74HC595 (global OE, no per‑wheel PWM)
 
-- The shield’s **enable pins (EN1–EN4)**—the usual PWM control points—are **hard‑tied HIGH** (via jumpers/solder bridges) on this variant.
-- Direction pins **IN1–IN4** map to regular digital I/O (non‑PWM), so you get **on/off + direction** per motor but not analogWrite PWM on each motor.
-- Some boards expose **one PWM per side** (shared left/right speed), which we may use for FAST/SLOW; otherwise we emulate SLOW with coarse, low‑frequency duty pulsing (careful to avoid servo jitter).
-- Upshot for Phase‑1: we run **two speed tiers** and rely on smart timing/geometry rather than fine per‑wheel control. That’s sufficient for stable avoidance.
+- Direction lines are driven through a **74HC595** (Q0..Q7). The register’s **OE is on D7** and is **active‑LOW**; we drive global speed via PWM on OE (duty is inverted: `analogWrite(255 − pwm)`).
+- There is no per‑wheel or per‑side EN available in this build; all motors share the single OE line.
+- **ARC** is implemented by keeping OE at the chosen tier and briefly pulsing the inner‑side motor bits OFF using `SLOW_PULSE_ON_MS` / `SLOW_PULSE_OFF_MS` (fake a slower track without side EN).
+- Upshot for Phase‑1: we run **two speed tiers** (FAST/SLOW) globally and shape arcs via bit‑pulsing; this is sufficient for stable avoidance.
 
 ### 2.3 I²C / IMU pin budget (for later)
 
@@ -122,7 +122,7 @@ jetson/
 arduino/
 ├─ src/
 │  ├─ BuggyPhase1.ino          # setup()/loop(); module init + fixed tick order
-│  ├─ pins.h                   # IN1..IN4, (optional) EN_L/EN_R, servo, trig/echo; REV mask
+│  ├─ pins.h                   # 74HC595 Q-map + global OE, servo D10, trig A0/echo A1; REV mask
 │  ├─ config.h                 # PWM tiers, timings, ranges, baud, hysteresis constants
 │  ├─ motion.h / motion.cpp    # modes: F_FAST/F_SLOW, ARC_L/R, SPIN_L/R, BACKOFF, STOP
 │  ├─ servo_scan.h / .cpp      # commandable servo position + settle window

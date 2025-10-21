@@ -25,7 +25,7 @@ def main():
         ser.write(b"HB\n")
         ser.flush()
         line = ser.readline().decode("utf-8", errors="ignore").strip()
-        if line:
+        if line and (line.startswith("DIST,") or line.startswith("STAT,")):
             print(line)
         time.sleep(0.05)
 

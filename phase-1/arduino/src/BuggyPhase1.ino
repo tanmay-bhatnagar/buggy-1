@@ -9,8 +9,7 @@
 
 void setup() {
   Serial.begin(BAUD_RATE);
-  unsigned long t0 = millis();
-  while (!Serial && (millis() - t0) < 250) { ; }
+  delay(250); // avoid UNO R4 boot hang on Jetson
 
   pins_init();
   motion_init();

@@ -5,6 +5,7 @@
 #include "ultrasonic.h"
 #include "servo_scan.h"
 #include "config.h"
+#include "watchdog.h"
 
 static String g_line;
 
@@ -32,13 +33,13 @@ static void handle_command(const String& line) {
     return;
   }
   if (line == "STOP") { motion_set_mode(MODE_STOP); return; }
-  if (line == "SPINL") { motion_set_mode(MODE_SPIN_LEFT); return; }
-  if (line == "SPINR") { motion_set_mode(MODE_SPIN_RIGHT); return; }
-  if (line == "F,FAST") { motion_set_mode(MODE_FORWARD_FAST); return; }
-  if (line == "F,SLOW") { motion_set_mode(MODE_FORWARD_SLOW); return; }
-  if (line == "B,SLOW") { motion_set_mode(MODE_BACK_SLOW); return; }
-  if (line == "L,SLOW") { motion_set_mode(MODE_ARC_LEFT); return; }
-  if (line == "R,SLOW") { motion_set_mode(MODE_ARC_RIGHT); return; }
+  if (line == "SPINL") { watchdog_note_hb(); motion_set_mode(MODE_SPIN_LEFT); return; }
+  if (line == "SPINR") { watchdog_note_hb(); motion_set_mode(MODE_SPIN_RIGHT); return; }
+  if (line == "F,FAST") { watchdog_note_hb(); motion_set_mode(MODE_FORWARD_FAST); return; }
+  if (line == "F,SLOW") { watchdog_note_hb(); motion_set_mode(MODE_FORWARD_SLOW); return; }
+  if (line == "B,SLOW") { watchdog_note_hb(); motion_set_mode(MODE_BACK_SLOW); return; }
+  if (line == "L,SLOW") { watchdog_note_hb(); motion_set_mode(MODE_ARC_LEFT); return; }
+  if (line == "R,SLOW") { watchdog_note_hb(); motion_set_mode(MODE_ARC_RIGHT); return; }
 }
 
 void serial_proto_init() {
