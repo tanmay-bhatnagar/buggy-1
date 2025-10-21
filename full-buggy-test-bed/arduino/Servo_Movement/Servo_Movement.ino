@@ -1,47 +1,18 @@
-// 1_3.ino — Movement + Servo(auto-sweep on move) + Ultrasonic (prints only on command)
-// Board: Arduino UNO R4 WiFi
-// Serial: 115200
-//
-// Commands (ASCII):
-//   F<spd> / B<spd> / L<spd> / R<spd> / S      (0..255)
-//   p<angle>                                   (0..180) — direct set (optional)
-//   t<cm>                                      obstacle threshold (1..399)
-//   q                                          status snapshot (includes one ultrasonic read)
-//
-// Telemetry (minimal by design):
-//   new code
-//   STATUS ready
-//   SRV deg=<angle>      (on p<angle> and at boot; servo sweep doesn’t spam)
-//   ULS cm=<val>         (only when a command executes or a stop event occurs)
-//   DRV mode=<...> spd=<...>  (on drive commands)
-//   EVT stop=obstacle|deadman|command
-//
-// Behavior highlights:
-// - Ultrasonic sampling runs at ~10 Hz for safety, but prints only on command or stop.
-// - Any non-zero movement (F/B/L/R) starts a servo sweep. Stop/auto-stop halts and detaches.
-// - Robust serial parser: accepts CR, LF, or CRLF; case-insensitive command letters; echoes CMD.
+// UNO R4 + L293D v1-style shield (74HC595) + Ultrasonic + Servo
+// Compact protocol @115200 (bidirectional monitor)
+// Commands: F/B/L/R<n>, S, P<deg>, T<n>, Q, H
+//  - T<n>: safety threshold in cm (0 disables). Debounced: need 3 consecutive hits <= n.
+// Telemetry: STATUS READY, STAT ..., ULS cm=..., EVT stop=<command|safety>
 
 #include <Arduino.h>
 #include <Servo.h>
 
-// ---- Pins (legacy) ----
-const uint8_t SR_DATA  = 8;    // 74HC595 SER
-const uint8_t SR_LATCH = 12;   // 74HC595 RCLK
-const uint8_t SR_CLK   = 4;    // 74HC595 SRCLK
-const uint8_t SR_OE    = 7;    // 74HC595 OE (active LOW)
-const uint8_t US_TRIG  = A0;
-const uint8_t US_ECHO  = A1;
-const uint8_t SERVO_PIN = 10;  // legacy servo header D10
+// ---------------- Pins (match your wiring) -----------------
+const uint8_t SR_DATA  = 8;   // 74HC595 SER
+const uint8_t SR_LATCH = 12;  // RCLK / LATCH
+const uint8_t SR_CLK   = 4;   // SRCLK / CLOCK
+const uint8_t SR_OE    = 7;   // OE (active LOW) — PWM gate for speed
 
-// ---- Timing knobs ----
-const unsigned long ULS_PERIOD_MS     = 100;   // sampling cadence (no printing)
-const unsigned long DEADMAN_MS        = 1000;  // auto-stop if no cmd
-const unsigned long RAMP_MS           = 180;   // speed ramp time
-const uint16_t      PWM_PERIOD_US     = 2000;  // ~500 Hz OE gating
-
-volatile int stop_threshold_cm = 25;
-
-// ---- 74HC595 → L293D mapping (from legacy testbench) ----
 #define M1_A_BIT 2
 #define M1_B_BIT 3
 #define M2_A_BIT 1
@@ -51,289 +22,179 @@ volatile int stop_threshold_cm = 25;
 #define M4_A_BIT 0
 #define M4_B_BIT 6
 
-// Per-motor polarity (true = flip FWD/REV for that motor)
-// Legacy: M1..M4 ≡ (FL, RL, RR, FR)
-const bool REV_M1 = false;
-const bool REV_M2 = true;
-const bool REV_M3 = false;
-const bool REV_M4 = true;
+struct Mbits { uint8_t A, B; };
+Mbits MB[4] = { {M1_A_BIT,M1_B_BIT}, {M2_A_BIT,M2_B_BIT}, {M3_A_BIT,M3_B_BIT}, {M4_A_BIT,M4_B_BIT} };
+const bool REV[4] = { false, true, false, true }; // FL, RL, RR, FR flip map
 
-#define BIT_(b) (uint8_t(1U<<(b)))
+const uint8_t US_TRIG = A0;   // Ultrasonic TRIG
+const uint8_t US_ECHO = A1;   // Ultrasonic ECHO
 
-const uint8_t M1_FWD = REV_M1 ? BIT_(M1_B_BIT) : BIT_(M1_A_BIT);
-const uint8_t M1_REV = REV_M1 ? BIT_(M1_A_BIT) : BIT_(M1_B_BIT);
-const uint8_t M2_FWD = REV_M2 ? BIT_(M2_B_BIT) : BIT_(M2_A_BIT);
-const uint8_t M2_REV = REV_M2 ? BIT_(M2_A_BIT) : BIT_(M2_B_BIT);
-const uint8_t M3_FWD = REV_M3 ? BIT_(M3_B_BIT) : BIT_(M3_A_BIT);
-const uint8_t M3_REV = REV_M3 ? BIT_(M3_A_BIT) : BIT_(M3_B_BIT);
-const uint8_t M4_FWD = REV_M4 ? BIT_(M4_B_BIT) : BIT_(M4_A_BIT);
-const uint8_t M4_REV = REV_M4 ? BIT_(M4_A_BIT) : BIT_(M4_B_BIT);
-
-const uint8_t MASK_FWD   = (M1_FWD | M2_FWD | M3_FWD | M4_FWD);
-const uint8_t MASK_REV   = (M1_REV | M2_REV | M3_REV | M4_REV);
-const uint8_t MASK_LEFT  = (M1_REV | M2_REV | M3_FWD | M4_FWD);
-const uint8_t MASK_RIGHT = (M1_FWD | M2_FWD | M3_REV | M4_REV);
-const uint8_t MASK_STOP  = 0x00;
-
-// ---- Globals ----
-Servo srv;
-
-enum Mode : uint8_t { M_STOP, M_FWD, M_REV, M_LEFT, M_RIGHT };
-volatile Mode drive_mode = M_STOP;
-
-volatile uint8_t sr_pattern = MASK_STOP;
-volatile int target_speed = 0;      // 0..255
-volatile int current_speed = 0;     // 0..255
-
-unsigned long t_last_cmd   = 0;
-unsigned long t_last_uls   = 0;
-unsigned long t_ramp_start = 0;
-unsigned long pwm_t0       = 0;
-
-// --- Servo sweep state (auto during movement) ---
+const uint8_t SERVO_PIN = 10; // Servo signal
 const int SERVO_MIN = 30, SERVO_MAX = 150, SERVO_STEP = 2;
 const unsigned long SERVO_TICK_MS = 20;
-bool servoAttached = false, sweepEnabled = false;
-int  servoAngle = (SERVO_MIN + SERVO_MAX)/2, servoDir = +1;
+
+// ---------------- Types BEFORE usage (fix) -----------------
+// Avoid forward-declare issues by defining the enum up here.
+enum Dir : uint8_t { REL=0, FWD=1, REVv=2 };
+
+// ---------------- State -----------------------------------
+Servo scanServo;
+int  servoAngle = (SERVO_MIN + SERVO_MAX)/2;
+int  servoDir   = +1;
+bool servoAttached = false;
+bool sweepEnabled  = false;
 unsigned long nextServoTick = 0;
 
-// ---- 595 helpers ----
-static inline void srWrite(uint8_t v) {
+volatile bool abortFlag = false;
+uint8_t latch_state = 0x00;
+char mode = 'S';
+uint8_t speedVal = 0;         // 0..255
+int stopThresholdCm = 25;     // 0 disables; default
+long lastCM = -1;
+
+// ---------------- Shift register helpers ------------------
+void latchWrite(){
   digitalWrite(SR_LATCH, LOW);
-  shiftOut(SR_DATA, SR_CLK, MSBFIRST, v);
+  for (int i=7; i>=0; --i){
+    digitalWrite(SR_CLK, LOW);
+    digitalWrite(SR_DATA, (latch_state >> i) & 0x1);
+    digitalWrite(SR_CLK, HIGH);
+  }
   digitalWrite(SR_LATCH, HIGH);
 }
-static inline void motors_idle_safe() {
-  digitalWrite(SR_OE, HIGH);
-  srWrite(MASK_STOP);
-  sr_pattern = MASK_STOP;
+void setBit(uint8_t bit, bool val){
+  if (val) latch_state |=  (1 << bit);
+  else     latch_state &= ~(1 << bit);
+  latchWrite();
 }
-static inline void set_drive_pattern(Mode m) {
-  uint8_t pat = MASK_STOP;
-  switch (m) {
-    case M_FWD:  pat = MASK_FWD;  break;
-    case M_REV:  pat = MASK_REV;  break;
-    case M_LEFT: pat = MASK_LEFT; break;
-    case M_RIGHT:pat = MASK_RIGHT;break;
-    default:     pat = MASK_STOP; break;
-  }
-  sr_pattern = pat;
-  srWrite(pat);
+void setDirBits(uint8_t m, Dir intended){
+  Dir d = intended;
+  if (intended != REL && REV[m]) d = (intended == FWD) ? REVv : FWD;
+  if (d == REL)      { setBit(MB[m].A,0); setBit(MB[m].B,0); }
+  else if (d == FWD) { setBit(MB[m].A,1); setBit(MB[m].B,0); }
+  else               { setBit(MB[m].A,0); setBit(MB[m].B,1); }
+}
+void allREL(){ for (int i=0;i<4;i++) setDirBits(i, REL); }
+
+void pwmSpeed(uint8_t spd){
+  speedVal = spd;
+  // OE is active LOW; analogWrite duty 0..255; duty=0 => fully enabled
+  uint8_t duty = 255 - spd; // spd=255 -> duty=0; spd=0 -> duty=255
+  analogWrite(SR_OE, duty);
 }
 
-// ---- PWM + ramp ----
-static inline void pwm_service() {
-  const unsigned long now = micros();
-  const unsigned long dt = now - pwm_t0;
-  if (dt >= PWM_PERIOD_US) pwm_t0 = now;
-  unsigned long on_us = (unsigned long)current_speed * PWM_PERIOD_US / 255;
-  digitalWrite(SR_OE, (dt < on_us) ? LOW : HIGH);  // LOW=enabled
-}
-static inline void ramp_service() {
-  if (current_speed == target_speed) return;
-  unsigned long now = millis();
-  if (t_ramp_start == 0) t_ramp_start = now;
-  long elapsed = (long)(now - t_ramp_start);
-  if (elapsed >= (long)RAMP_MS) { current_speed = target_speed; return; }
-  long delta = (long)target_speed - (long)current_speed;
-  int step = max(1, (int)(abs(delta) * 10L / (long)RAMP_MS));
-  current_speed += (delta > 0 ? +step : -step);
-  if ((delta > 0 && current_speed > target_speed) ||
-      (delta < 0 && current_speed < target_speed)) current_speed = target_speed;
-}
-
-// ---- Ultrasonic ----
-static inline long uls_ping_us() {
+// ---------------- Ultrasonic -------------------------------
+long readUltrasonicCM(){
   digitalWrite(US_TRIG, LOW); delayMicroseconds(2);
   digitalWrite(US_TRIG, HIGH); delayMicroseconds(10);
   digitalWrite(US_TRIG, LOW);
-  return pulseIn(US_ECHO, HIGH, 30000UL);
-}
-static inline float us_to_cm(long us) { return (us > 0) ? (us / 58.0f) : -1.0f; }
-static inline long uls_read_and_print_once(const __FlashStringHelper* tag) {
-  long us = uls_ping_us();
-  if (us == 0) { Serial.println(F("ULS timeout")); return -1; }
-  float cm = us_to_cm(us);
-  Serial.print(F("ULS cm=")); Serial.println(cm,1);
-  if (tag) { (void)tag; }
-  return (long)cm;
+  unsigned long dur = pulseIn(US_ECHO, HIGH, 30000UL);
+  if (!dur) return -1; // timeout
+  long cm = (long)(dur / 58UL);
+  if (cm < 0) cm = -1;
+  return cm;
 }
 
-// ---- Servo helpers ----
-static inline void servo_attach_if() {
-  if (!servoAttached) { srv.attach(SERVO_PIN); servoAttached = true; }
-}
-static inline void servo_detach_if() {
-  if (servoAttached) { srv.detach(); servoAttached = false; }
-}
-static inline void servo_set(int deg) {
-  servo_attach_if();
-  if (deg < 0) deg = 0; if (deg > 180) deg = 180;
-  srv.write(deg);
-  Serial.print(F("SRV deg=")); Serial.println(deg);
-}
-static inline void servo_start_sweep() {
-  sweepEnabled = true;
-  servo_attach_if();
-  nextServoTick = millis() + SERVO_TICK_MS;
-}
-static inline void servo_stop_sweep() {
+// ---------------- Servo -----------------------------------
+void servo_stopSweep(){
   sweepEnabled = false;
-  servo_detach_if();
-  pinMode(SERVO_PIN, OUTPUT);
-  digitalWrite(SERVO_PIN, LOW);
+  if (servoAttached){ scanServo.detach(); servoAttached=false; }
+  pinMode(SERVO_PIN, OUTPUT); digitalWrite(SERVO_PIN, LOW);
 }
-static inline void servo_tick() {
+void servo_startSweep(){
+  if (!servoAttached){ scanServo.attach(SERVO_PIN); scanServo.write(servoAngle); servoAttached=true; }
+  sweepEnabled = true; nextServoTick = millis() + SERVO_TICK_MS;
+}
+void servo_tick(){
   if (!sweepEnabled || millis() < nextServoTick) return;
   servoAngle += servoDir * SERVO_STEP;
-  if (servoAngle >= SERVO_MAX) { servoAngle = SERVO_MAX; servoDir = -1; }
-  if (servoAngle <= SERVO_MIN) { servoAngle = SERVO_MIN; servoDir = +1; }
-  srv.write(servoAngle);
+  if (servoAngle >= SERVO_MAX){ servoAngle = SERVO_MAX; servoDir = -1; }
+  if (servoAngle <= SERVO_MIN){ servoAngle = SERVO_MIN; servoDir = +1; }
+  scanServo.write(servoAngle);
   nextServoTick = millis() + SERVO_TICK_MS;
 }
 
-// ---- Drive control ----
-static inline void drive(Mode m, int spd, bool print_ultra_after=true) {
-  if (spd < 0) spd = 0; if (spd > 255) spd = 255;
+// ---------------- Serial utils -----------------------------
+bool readLine(String &out){ static String buf; while(Serial.available()){ char c=(char)Serial.read(); if(c=='\r') continue; if(c=='\n'){ out=buf; buf=""; return true; } buf+=c; if(buf.length()>120) buf=""; } return false; }
 
-  if (m != drive_mode) {
-    digitalWrite(SR_OE, HIGH);
-    srWrite(MASK_STOP);
-    delay(20);
-    set_drive_pattern(m);
-    drive_mode = m;
-  }
-
-  target_speed = spd; t_ramp_start = 0;
-
-  // Servo rule: sweep when moving, stop when not
-  if (drive_mode != M_STOP && spd > 0) servo_start_sweep();
-  else                                  servo_stop_sweep();
-
-  Serial.print(F("DRV mode="));
-  Serial.print(m==M_FWD?'F':m==M_REV?'B':m==M_LEFT?'L':m==M_RIGHT?'R':'S');
-  Serial.print(F(" spd=")); Serial.println(target_speed);
-
-  if (print_ultra_after) uls_read_and_print_once(F("cmd"));
+void printStat(){
+  Serial.print(F("STAT mode=")); Serial.print(mode);
+  Serial.print(F(" spd=")); Serial.print((int)speedVal);
+  Serial.print(F(" thresh=")); Serial.print(stopThresholdCm);
+  Serial.print(F(" last_cm=")); Serial.print(lastCM);
+  Serial.print(F(" sweep=")); Serial.println(sweepEnabled?1:0);
+}
+void printULS(){
+  Serial.print(F("ULS cm=")); Serial.print(lastCM);
+  Serial.print(F(" angle=")); Serial.print(sweepEnabled?servoAngle:-1);
+  Serial.print(F(" t_ms=")); Serial.println(millis());
 }
 
-static inline void drive_stop(const __FlashStringHelper* reason, bool print_ultra_after=true) {
-  target_speed = 0; current_speed = 0;
-  digitalWrite(SR_OE, HIGH);
-  set_drive_pattern(M_STOP);
-  drive_mode = M_STOP;
-  servo_stop_sweep();
-  Serial.print(F("EVT stop=")); Serial.println(reason);
-  if (print_ultra_after) uls_read_and_print_once(F("stop"));
+// ---------------- Motion -----------------------------------
+void applyMode(char m){
+  mode = m;
+  if (m=='S'){ allREL(); pwmSpeed(0); servo_stopSweep(); return; }
+  if (m=='F'){ for(int i=0;i<4;i++) setDirBits(i, FWD); }
+  else if (m=='B'){ for(int i=0;i<4;i++) setDirBits(i, REVv); }
+  else if (m=='L'){ setDirBits(0,REVv); setDirBits(1,REVv); setDirBits(2,FWD); setDirBits(3,FWD); }
+  else if (m=='R'){ setDirBits(0,FWD); setDirBits(1,FWD); setDirBits(2,REVv); setDirBits(3,REVv); }
+  if (speedVal==0) pwmSpeed(160); // default if not set
+  servo_startSweep();
 }
 
-// ---- Command parser ----
-String inbuf;
-
-static inline void handle_line(String ln) {
-  ln.trim();
-  if (!ln.length()) return;
-
-  // Echo what we got (useful on Jetson terminals)
-  Serial.print(F("CMD=")); Serial.println(ln);
-
-  char c = ln.charAt(0);
-  if (c >= 'a' && c <= 'z') c = c - 'a' + 'A';
-  String arg = ln.substring(1);
-  arg.trim();
-
-  t_last_cmd = millis();
-
-  if (c=='F'||c=='B'||c=='L'||c=='R') {
-    int spd = arg.toInt();
-    drive(c=='F'?M_FWD:c=='B'?M_REV:c=='L'?M_LEFT:M_RIGHT, spd, true);
-    return;
-  }
-  if (c=='S') { drive_stop(F("command"), true); return; }
-
-  if (c=='P') {                 // direct servo set (optional)
-    int ang = arg.toInt();
-    servo_set(ang);
-    uls_read_and_print_once(F("cmd"));
-    return;
-  }
-
-  if (c=='T') {                 // threshold
-    int cm = arg.toInt();
-    if (cm > 0 && cm < 400) {
-      stop_threshold_cm = cm;
-      Serial.print(F("CFG stop_threshold_cm=")); Serial.println(stop_threshold_cm);
-    }
-    uls_read_and_print_once(F("cmd"));
-    return;
-  }
-
-  if (c=='Q') {                 // snapshot
-    Serial.print(F("STAT mode="));
-    Serial.print(drive_mode==M_FWD?'F':drive_mode==M_REV?'B':drive_mode==M_LEFT?'L':drive_mode==M_RIGHT?'R':'S');
-    Serial.print(F(" spd=")); Serial.print(current_speed);
-    Serial.print(F(" thresh=")); Serial.println(stop_threshold_cm);
-    uls_read_and_print_once(F("cmd"));
-    return;
-  }
-
-  Serial.println(F("ERROR BAD_CMD"));
+// ---------------- Parser -----------------------------------
+void parseAndRun(String line){
+  line.trim(); if(!line.length()) return; char c=line[0];
+  if (c=='H'){ Serial.println(F("CMD: F/B/L/R<n>, S, P<deg>, T<n>, Q, H")); return; }
+  if (c=='Q'){ printStat(); lastCM=readUltrasonicCM(); printULS(); return; }
+  if (c=='S'){ applyMode('S'); Serial.println(F("EVT stop=command")); printStat(); lastCM=readUltrasonicCM(); printULS(); return; }
+  if (c=='P'){
+    int v = line.substring(1).toInt(); v = constrain(v,0,180);
+    if (!servoAttached) { scanServo.attach(SERVO_PIN); servoAttached=true; }
+    sweepEnabled=false; servoAngle=v; scanServo.write(v);
+    printStat(); lastCM=readUltrasonicCM(); printULS(); return; }
+  if (c=='T'){
+    int v = line.substring(1).toInt(); if (v<0) v=0; if (v>400) v=400; stopThresholdCm=v;
+    printStat(); lastCM=readUltrasonicCM(); printULS(); return; }
+  if (c=='F'||c=='B'||c=='L'||c=='R'){
+    int v = line.substring(1).toInt(); v = constrain(v,0,255); pwmSpeed(v); applyMode(c); printStat(); lastCM=readUltrasonicCM(); printULS(); return; }
+  Serial.println(F("ERR unknown"));
 }
 
-// ---- Setup/Loop ----
-void setup() {
-  Serial.begin(115200); delay(80);
-  Serial.println(F("new code"));
-  Serial.println(F("STATUS ready"));
-
+// ---------------- Setup / Loop ------------------------------
+void setup(){
+  Serial.begin(115200);
   pinMode(SR_DATA,OUTPUT); pinMode(SR_LATCH,OUTPUT); pinMode(SR_CLK,OUTPUT); pinMode(SR_OE,OUTPUT);
-  digitalWrite(SR_CLK,LOW); motors_idle_safe();
+  digitalWrite(SR_OE, LOW); // enable 595 outputs (PWM will modulate)
+  latch_state=0; latchWrite(); allREL(); pwmSpeed(0);
 
-  pinMode(US_TRIG,OUTPUT); pinMode(US_ECHO,INPUT);
+  pinMode(US_TRIG,OUTPUT); digitalWrite(US_TRIG,LOW); pinMode(US_ECHO,INPUT);
+  servo_stopSweep();
+  analogWrite(SR_OE, 255); // outputs disabled at boot
 
-  // Park servo at neutral (reported once); sweep starts only on movement
-  servo_set(90);
-
-  t_last_cmd = millis(); pwm_t0 = micros();
+  delay(30);
+  Serial.println(F("STATUS READY"));
 }
 
-void loop() {
-  // Robust line reader: end on LF or CR; tolerate CRLF; guard length
-  while (Serial.available()) {
-    char ch = (char)Serial.read();
+void loop(){
+  String line; if (readLine(line)) parseAndRun(line);
 
-    if (ch == '\n' || ch == '\r') {
-      if (inbuf.length()) { handle_line(inbuf); inbuf = ""; }
-      continue;
-    }
-    if ((uint8_t)ch < 0x20) continue; // skip other control chars
-
-    inbuf += ch;
-    if (inbuf.length() > 120) inbuf = "";  // safety reset
-  }
-
+  // periodic tasks: servo sweep, ultrasonic, safety debounce
+  static unsigned long nextSample=0; if (sweepEnabled) servo_tick();
   unsigned long now = millis();
-
-  // Dead-man
-  if (drive_mode!=M_STOP && (now - t_last_cmd) > DEADMAN_MS) drive_stop(F("deadman"), true);
-
-  // Periodic ultrasonic sampling (NO printing) for safety stop
-  if ((now - t_last_uls) >= ULS_PERIOD_MS) {
-    t_last_uls = now;
-    long us = uls_ping_us();
-    if (us != 0) {
-      float cm = us_to_cm(us);
-      if (drive_mode != M_STOP && cm > 0 && cm <= stop_threshold_cm) {
-        drive_stop(F("obstacle"), true);
+  if (now >= nextSample){
+    lastCM = readUltrasonicCM();
+    static uint8_t hits=0;
+    if (stopThresholdCm>0){
+      if (lastCM>=0 && lastCM<=stopThresholdCm) { if (hits<255) hits++; }
+      else { hits=0; }
+      if (hits>=3 && mode!='S'){
+        applyMode('S');
+        Serial.println(F("EVT stop=safety"));
+        printStat(); printULS();
       }
-    }
+    } else { hits=0; }
+    nextSample = now + 80; // ~12.5 Hz
   }
-
-  // Servo sweep tick (only when moving)
-  servo_tick();
-
-  // Speed ramp & OE PWM
-  ramp_service();
-  if (drive_mode==M_STOP || current_speed==0) digitalWrite(SR_OE, HIGH);
-  else pwm_service();
 }
+

@@ -145,7 +145,7 @@ def main():
     ap.add_argument("--sketch", help="Path to sketch folder to compile & upload (optional)")
     ap.add_argument("--port", help="Serial port (auto-detected if omitted)")
     ap.add_argument("--baud", type=int, default=115200, help="Monitor baud rate (default: 115200)")
-    ap.add_argument("--fqbn", default="arduino:arduino:renesas_uno:unor4wifi", help="Fully qualified board name for arduino-cli")
+    ap.add_argument("--fqbn", default="arduino:renesas_uno:unor4wifi", help="Fully qualified board name for arduino-cli")
     ap.add_argument("--no-upload", action="store_true", help="Skip compile/upload and only open monitor")
     ap.add_argument("--eol", choices=["LF", "CRLF", "CR"], default="LF", help="Line ending appended to each command")
     ap.add_argument("--dtr-reset", action="store_true", help="Toggle DTR to reset just before monitoring")
