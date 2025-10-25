@@ -7,6 +7,7 @@ static MotionMode g_mode = MODE_STOP;
 static int g_left_pwm = 0;
 static int g_right_pwm = 0;
 static unsigned long g_pulse_ms = 0;
+static int g_pwm_override = -1; // -1 = none; else 0..255
 
 // 74HC595 shift register state
 static uint8_t g_latch_state = 0x00;
@@ -67,6 +68,7 @@ const char* motion_mode_name(MotionMode m) {
 
 int motion_left_pwm() { return g_left_pwm; }
 int motion_right_pwm() { return g_right_pwm; }
+int motion_get_pwm_override() { return g_pwm_override; }
 
 void motion_tick() {
   // Decide directions and conceptual per-side speeds
@@ -94,6 +96,10 @@ void motion_tick() {
       dirL = +1; dirR = -1; pwmL = PWM_SLOW; pwmR = PWM_SLOW; global_pwm = PWM_SLOW; break;
   }
 
+  // Apply explicit override if present
+  if (g_pwm_override >= 0) {
+    global_pwm = g_pwm_override;
+  }
   // Apply global speed tier via OE (active-LOW): write (255 - speed)
   analogWrite(SR_OE, 255 - constrain(global_pwm, 0, 255));
 
@@ -126,4 +132,25 @@ void motion_tick() {
 
   g_left_pwm = pwmL;
   g_right_pwm = pwmR;
+}
+
+void motion_pwm_speed(uint8_t pwm) {
+  g_pwm_override = (int)pwm;
+}
+void motion_clear_pwm_speed() {
+  g_pwm_override = -1;
+}
+int motion_get_global_pwm() {
+  // Return last applied global PWM value (override wins during tick)
+  if (g_pwm_override >= 0) return g_pwm_override;
+  switch (g_mode) {
+    case MODE_FORWARD_FAST: return PWM_FAST;
+    case MODE_FORWARD_SLOW: return PWM_SLOW;
+    case MODE_BACK_SLOW: return PWM_SLOW;
+    case MODE_ARC_LEFT: return PWM_FAST;
+    case MODE_ARC_RIGHT: return PWM_FAST;
+    case MODE_SPIN_LEFT: return PWM_SLOW;
+    case MODE_SPIN_RIGHT: return PWM_SLOW;
+    default: return 0;
+  }
 }

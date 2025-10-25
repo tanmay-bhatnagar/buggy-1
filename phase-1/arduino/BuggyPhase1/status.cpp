@@ -3,6 +3,7 @@
 #include "motion.h"
 #include "ultrasonic.h"
 #include "config.h"
+#include "servo_scan.h"
 
 static unsigned long g_last_stat_ms = 0;
 static MotionMode g_last_mode = MODE_STOP;
@@ -78,3 +79,32 @@ void status_emit_once() {
 
 void status_set_verbose(bool on) { g_verbose = on; }
 bool status_get_verbose() { return g_verbose; }
+
+void printStat() {
+  // STAT mode=<F|B|L|R|S> spd=<0..255> thresh=<cm or 0> last_cm=<value> sweep=<0|1>
+  MotionMode m = motion_get_mode();
+  char modeChar = 'S';
+  switch (m) {
+    case MODE_FORWARD_FAST: case MODE_FORWARD_SLOW: modeChar = 'F'; break;
+    case MODE_BACK_SLOW: modeChar = 'B'; break;
+    case MODE_ARC_LEFT: case MODE_SPIN_LEFT: modeChar = 'L'; break;
+    case MODE_ARC_RIGHT: case MODE_SPIN_RIGHT: modeChar = 'R'; break;
+    case MODE_STOP: default: modeChar = 'S'; break;
+  }
+  extern uint16_t getSafetyThresholdCM();
+  extern int motion_get_global_pwm();
+  Serial.print("STAT mode="); Serial.print(modeChar);
+  Serial.print(" spd="); Serial.print(motion_get_global_pwm());
+  Serial.print(" thresh="); Serial.print(getSafetyThresholdCM());
+  float cm = ultrasonic_last_cm();
+  Serial.print(" last_cm="); if (isnan(cm)) Serial.print(-1); else Serial.print(cm, 1);
+  Serial.print(" sweep="); Serial.println(servo_is_sweeping() ? 1 : 0);
+}
+
+void printULS() {
+  // ULS cm=<val> angle=<deg or -1> t_ms=<millis>
+  float cm = ultrasonic_last_cm();
+  Serial.print("ULS cm="); if (isnan(cm)) Serial.print(-1); else Serial.print(cm, 1);
+  Serial.print(" angle="); Serial.print(servo_get_current_deg());
+  Serial.print(" t_ms="); Serial.println(millis());
+}

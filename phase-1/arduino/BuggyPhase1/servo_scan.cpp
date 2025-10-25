@@ -9,6 +9,7 @@ static int g_target_deg = 90;
 static int g_current_deg = 90;
 static unsigned long g_last_move_ms = 0;
 static bool g_attached = false;
+static bool g_sweeping = false;
 
 void servo_init() {
   // Start detached to avoid idle jitter
@@ -26,6 +27,7 @@ void servo_set_target_deg(int deg) {
     g_servo.write(g_target_deg);
     g_current_deg = g_target_deg;
     g_last_move_ms = millis();
+    g_sweeping = false; // stop any sweep when explicit target is set
   }
 }
 
@@ -46,3 +48,19 @@ void servo_tick() {
     digitalWrite(SERVO_PIN, LOW);
   }
 }
+
+void servo_stopSweep() {
+  g_sweeping = false;
+  if (g_attached && servo_is_settled()) {
+    g_servo.detach();
+    g_attached = false;
+    pinMode(SERVO_PIN, OUTPUT);
+    digitalWrite(SERVO_PIN, LOW);
+  }
+}
+
+void servo_startSweep() {
+  g_sweeping = true; // placeholder for future sweep implementation
+}
+
+bool servo_is_sweeping() { return g_sweeping; }

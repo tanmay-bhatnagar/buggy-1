@@ -261,9 +261,28 @@ CSV per loop: `t,state,speed,dist_center,dist_left,dist_right,decision,servo_deg
 
 - **Bench Mode** (manual serial testing): set `BENCH_MODE=true` in `arduino/BuggyPhase1/config.h`, reflash.
   - Watchdog heartbeat timeout becomes long (60 s) so it won’t STOP while you type.
-  - Status prints throttle to ~1 Hz and each `STAT` line appends `,MODE=BENCH`.
+  - Silent by default: no periodic prints. Use the compact commands below.
   - Boot banner prints `BOOT,PHASE1,BENCH`.
   - Use any serial terminal and send commands like `SERVO,90`, `PING`, `F,SLOW`.
+### Bench compact protocol
+
+Commands (no commas unless in legacy form):
+- `F`/`B`/`L`/`R<n>`: motion; optional `<n>` is speed 0–255 (default 160)
+- `S`: STOP (release, PWM 0)
+- `P<deg>`: servo angle 0–180
+- `T<n>`: ultrasonic safety stop threshold in cm (0 disables; 3-hit debounce)
+- `Q`: query once (prints one `STAT ...` and one `ULS ...`)
+- `H`: help (prints: `CMD: F/B/L/R<n>, S, P<deg>, T<n>, Q, H`)
+
+Legacy aliases (Jetson compatibility):
+- `SERVO,90` → `P90`
+- `PING` → `Q` (prints status + ultrasonic)
+- `STOP` → `S`
+- `SPINL`/`SPINR` → `L`/`R`
+- `F,FAST` → `F230`; `F,SLOW` → `F150`
+
+Diagnostics verbosity in Bench:
+- Default silent. Toggle streaming with `VERBOSE,ON` / `VERBOSE,OFF`.
 
 - **Runtime Mode** (autonomy with Jetson): set `BENCH_MODE=false`, reflash.
   - Jetson app sends `HB` every ~200 ms; UNO watchdog timeout is 600 ms.

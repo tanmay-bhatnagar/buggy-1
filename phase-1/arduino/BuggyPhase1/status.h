@@ -8,3 +8,7 @@ void status_emit_once();
 // Verbosity control: in Bench mode default comes from BENCH_VERBOSE_DEFAULT; in Runtime defaults to verbose
 void status_set_verbose(bool on);
 bool status_get_verbose();
+
+// One-shot formatted printers for compact protocol
+void printStat();
+void printULS();

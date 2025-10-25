@@ -14,6 +14,9 @@
 // You can toggle at runtime via VERBOSE,ON / VERBOSE,OFF in the serial console.
 #define BENCH_VERBOSE_DEFAULT 0
 
+// Default PWM for compact F/B/L/R when <n> is omitted (0–255)
+#define DEFAULT_BENCH_PWM 160
+
 // Global PWM tiers (applied on 74HC595 OE; active-LOW so duty is inverted)
 #define PWM_FAST 230
 #define PWM_SLOW 150
