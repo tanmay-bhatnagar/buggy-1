@@ -10,6 +10,9 @@ serial:
 pairing_seconds: 15       # Bluetooth pairing window before auto-start
 loop_sleep_s: 0.02        # Main loop sleep (≈50 Hz outer loop)
 
+# Optional runtime cutoff (seconds). If null/omitted → run indefinitely.
+max_seconds: null
+
 thresholds_cm:
   slow_enter: 60          # go SLOW when center < 60 cm
   slow_exit: 75           # back to FAST when center > 75 cm
