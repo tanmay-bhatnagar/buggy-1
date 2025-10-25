@@ -100,8 +100,13 @@ void motion_tick() {
   if (g_pwm_override >= 0) {
     global_pwm = g_pwm_override;
   }
-  // Apply global speed tier via OE (active-LOW): write (255 - speed)
-  analogWrite(SR_OE, 255 - constrain(global_pwm, 0, 255));
+  // Apply global speed tier via OE (active-LOW)
+  #if BENCH_MODE
+    // In Bench Mode, avoid PWM on OE to prevent timer conflicts; treat any >0 as fully enabled
+    digitalWrite(SR_OE, (global_pwm > 0) ? LOW : HIGH);
+  #else
+    analogWrite(SR_OE, 255 - constrain(global_pwm, 0, 255));
+  #endif
 
   // Pulse-gate sides that should be "slow" under a FAST global tier (arcs)
   unsigned long now = millis();

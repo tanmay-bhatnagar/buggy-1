@@ -55,8 +55,12 @@ inline void pins_init() {
   pinMode(SR_CLK, OUTPUT);
   pinMode(SR_LATCH, OUTPUT);
   pinMode(SR_OE, OUTPUT);
-  // Enable 595 outputs (active-LOW). analogWrite used for PWM (inverted)
-  analogWrite(SR_OE, 0); // fully enabled
+  // Enable 595 outputs (active-LOW)
+  #if BENCH_MODE
+    digitalWrite(SR_OE, LOW); // fully enabled, no PWM in Bench Mode
+  #else
+    analogWrite(SR_OE, 0); // fully enabled (PWM available in Runtime)
+  #endif
 
   pinMode(ULTRASONIC_TRIG, OUTPUT);
   digitalWrite(ULTRASONIC_TRIG, LOW);
