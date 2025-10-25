@@ -25,11 +25,17 @@ def run():
             watchdog.tick()
             _ = link.read_line()
             time.sleep(0.05)
+        t_start = time.time()
+        max_seconds = cfg.get("max_seconds")
         while True:
             watchdog.tick()
             sensing.tick()
             sm.tick()
             telemetry.tick()
+            if max_seconds is not None and (time.time() - t_start) >= float(max_seconds):
+                link.send_command("STOP")
+                telemetry.close()
+                return
             time.sleep(max(0.0, float(cfg.get("loop_sleep_s", 0.01))))
     except KeyboardInterrupt:
         link.send_command("STOP")

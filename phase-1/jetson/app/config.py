@@ -16,6 +16,7 @@ def load_config() -> dict:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--profile", choices=["tile", "carpet", "outdoors"], default=None)
     parser.add_argument("--config", default=None)
+    parser.add_argument("--max-seconds", type=float, default=None)
     args, _ = parser.parse_known_args()
 
     # Resolve repo root relative to this file
@@ -50,6 +51,8 @@ def load_config() -> dict:
     data.setdefault("pwm", {})
     data.setdefault("watchdog", {})
     data.setdefault("logging", {})
+    if args.max_seconds is not None:
+        data["max_seconds"] = float(args.max_seconds)
     return data
 
 

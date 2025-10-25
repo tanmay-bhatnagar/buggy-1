@@ -7,7 +7,7 @@ serial:
   write_timeout_s: 0.2
   read_timeout_s: 0.2
 
-pairing_seconds: 8        # Bluetooth pairing window before auto-start
+pairing_seconds: 15       # Bluetooth pairing window before auto-start
 loop_sleep_s: 0.02        # Main loop sleep (≈50 Hz outer loop)
 
 thresholds_cm:
