@@ -2,6 +2,9 @@
 #include "ultrasonic.h"
 #include "pins.h"
 #include "config.h"
+#include "motion.h"
+#include "status.h"
+#include "servo_scan.h"
 
 static float g_last_cm = NAN;
 static unsigned long g_last_ping_ms = 0;
@@ -65,8 +68,6 @@ void ultrasonic_tick() {
   }
   if (g_consec_hits >= 3) {
     // 3-hit debounce: trigger STOP once
-    extern void motion_set_mode(MotionMode);
-    extern void status_emit_once();
     motion_set_mode(MODE_STOP);
     status_emit_once();
     Serial.println("EVT stop=safety");
