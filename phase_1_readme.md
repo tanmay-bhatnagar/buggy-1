@@ -255,6 +255,25 @@ CSV per loop: `t,state,speed,dist_center,dist_left,dist_right,decision,servo_deg
 - Servo center/edges sanity: center \~90°, limits at SWEEP\_RIGHT/LEFT, no buzzing at endpoints.
 - Ultrasonic sanity at a known distance (e.g., \~50 cm). Confirm median agrees ±3–5 cm.
 
+---
+
+## Bench Mode vs Runtime Mode
+
+- **Bench Mode** (manual serial testing): set `BENCH_MODE=true` in `arduino/BuggyPhase1/config.h`, reflash.
+  - Watchdog heartbeat timeout becomes long (60 s) so it won’t STOP while you type.
+  - Status prints throttle to ~1 Hz and each `STAT` line appends `,MODE=BENCH`.
+  - Boot banner prints `BOOT,PHASE1,BENCH`.
+  - Use any serial terminal and send commands like `SERVO,90`, `PING`, `F,SLOW`.
+
+- **Runtime Mode** (autonomy with Jetson): set `BENCH_MODE=false`, reflash.
+  - Jetson app sends `HB` every ~200 ms; UNO watchdog timeout is 600 ms.
+  - Status cadence remains as configured for runtime.
+  - Boot banner prints `BOOT,PHASE1`.
+
+Quick tips:
+- Manual tests: Bench Mode ON → open `screen`/miniterm → `SERVO,90`, `PING`.
+- Autonomous runs: Bench Mode OFF → run Jetson app (heartbeat active).
+
 ### 5.2 Drills
 
 1. **Static wall approach** (start 1.5–2 m from a wall)

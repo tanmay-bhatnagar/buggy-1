@@ -19,7 +19,11 @@ void setup() {
   watchdog_init();
   status_init();
 
+  #if BENCH_MODE
+  Serial.println("BOOT,PHASE1,BENCH");
+  #else
   Serial.println("BOOT,PHASE1");
+  #endif
 }
 
 void loop() {

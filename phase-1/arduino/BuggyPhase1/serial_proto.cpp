@@ -10,6 +10,7 @@
 static String g_line;
 
 static void handle_command(const String& line) {
+  // line has been trimmed of CR/LF before reaching here
   if (line == "HB") {
     extern void watchdog_note_hb();
     watchdog_note_hb();
@@ -51,6 +52,11 @@ void serial_proto_tick() {
     char c = (char)Serial.read();
     if (c == '\n' || c == '\r') {
       if (g_line.length() > 0) {
+        // Trim any stray CR that may have been appended (e.g., \r\n terminals)
+        while (g_line.length() > 0) {
+          char last = g_line.charAt(g_line.length() - 1);
+          if (last == '\r' || last == '\n') g_line.remove(g_line.length() - 1); else break;
+        }
         handle_command(g_line);
         g_line = "";
       }
