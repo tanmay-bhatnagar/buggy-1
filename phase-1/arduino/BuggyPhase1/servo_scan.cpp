@@ -40,13 +40,18 @@ int servo_get_current_deg() { return g_current_deg; }
 
 void servo_tick() {
   // Detach after settle to keep quiet at idle
-  if (g_attached && servo_is_settled()) {
-    g_servo.detach();
-    g_attached = false;
-    // Ensure line held low
-    pinMode(SERVO_PIN, OUTPUT);
-    digitalWrite(SERVO_PIN, LOW);
-  }
+  #if BENCH_MODE
+    // Keep servo attached in Bench Mode to avoid disabling PWM timers that
+    // may be shared with motor OE PWM on some cores/boards.
+  #else
+    if (g_attached && servo_is_settled()) {
+      g_servo.detach();
+      g_attached = false;
+      // Ensure line held low
+      pinMode(SERVO_PIN, OUTPUT);
+      digitalWrite(SERVO_PIN, LOW);
+    }
+  #endif
 }
 
 void servo_stopSweep() {
