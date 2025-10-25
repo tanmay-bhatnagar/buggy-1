@@ -6,6 +6,7 @@
 #include "servo_scan.h"
 #include "config.h"
 #include "watchdog.h"
+#include "status.h"
 
 static String g_line;
 
@@ -16,6 +17,12 @@ static void handle_command(const String& line) {
     watchdog_note_hb();
     return;
   }
+  if (line == "STAT?") {
+    status_emit_once();
+    return;
+  }
+  if (line == "VERBOSE,ON") { status_set_verbose(true); return; }
+  if (line == "VERBOSE,OFF") { status_set_verbose(false); return; }
   if (line.startsWith("SERVO,")) {
     int comma = line.indexOf(',');
     int deg = line.substring(comma + 1).toInt();

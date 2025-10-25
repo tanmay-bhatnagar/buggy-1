@@ -274,6 +274,8 @@ Quick tips:
 - Manual tests: Bench Mode ON → open `screen`/miniterm → `SERVO,90`, `PING`.
 - Autonomous runs: Bench Mode OFF → run Jetson app (heartbeat active).
 
+Note: Bench is silent by default — no heartbeat needed; no periodic prints. Use `PING` for distances and `STAT?` for a one‑shot status snapshot. Toggle streaming diagnostics with `VERBOSE,ON` (and `VERBOSE,OFF` to return to silence).
+
 ### 5.2 Drills
 
 1. **Static wall approach** (start 1.5–2 m from a wall)

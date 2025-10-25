@@ -5,10 +5,14 @@
 // Bench Mode vs Runtime Mode
 // Set BENCH_MODE to 1 to enable manual bench testing from a serial terminal.
 //   - Bench Mode: long heartbeat timeout (no rapid STOP while typing),
-//                 slower status prints, boot banner includes "+BENCH".
+//                 silent by default (no periodic status), boot banner includes "+BENCH".
 //   - Runtime Mode: short heartbeat timeout; Jetson app must send HB.
 // Flip this flag and reflash to switch modes.
 #define BENCH_MODE 0
+
+// Default verbosity in Bench Mode: 0 = fully silent (no periodic STAT)
+// You can toggle at runtime via VERBOSE,ON / VERBOSE,OFF in the serial console.
+#define BENCH_VERBOSE_DEFAULT 0
 
 // Global PWM tiers (applied on 74HC595 OE; active-LOW so duty is inverted)
 #define PWM_FAST 230

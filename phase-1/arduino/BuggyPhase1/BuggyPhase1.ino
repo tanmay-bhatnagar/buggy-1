@@ -32,5 +32,6 @@ void loop() {
   servo_tick();
   ultrasonic_tick();
   motion_tick();
+  // In Bench Mode with silent default, status_tick will be a no-op unless verbosity is enabled
   status_tick();
 }

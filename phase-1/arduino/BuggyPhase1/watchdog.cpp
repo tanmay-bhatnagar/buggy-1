@@ -2,6 +2,7 @@
 #include "watchdog.h"
 #include "config.h"
 #include "motion.h"
+#include "status.h"
 
 static unsigned long g_last_hb_ms = 0;
 static bool g_latched = false;
@@ -16,6 +17,13 @@ void watchdog_tick() {
   unsigned long now = millis();
   if (!g_latched && (now - g_last_hb_ms > HB_TIMEOUT_MS)) {
     motion_set_mode(MODE_STOP);
+    // Emit a one-shot reasoned STAT only in Runtime Mode (Bench is already permissive)
+    #if BENCH_MODE
+      // In bench, do not spam; remain silent (boot banner is the only blip)
+    #else
+      status_emit_once(); // snapshot includes current mode
+      Serial.println("REASON=WDG");
+    #endif
     g_latched = true; // latch until HB or explicit motion cmd
   }
 }
