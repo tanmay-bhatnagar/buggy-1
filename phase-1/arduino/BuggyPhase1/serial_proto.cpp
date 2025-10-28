@@ -21,7 +21,17 @@ static void handle_command(const String& line) {
     handle_command(String("P") + deg);
     return;
   }
-  if (line == "PING") { handle_command("Q"); return; }
+  // PING must reply with a single DIST line for Jetson runtime
+  if (line == "PING") {
+    if (servo_is_settled()) {
+      float cm = ultrasonic_measure_cm();
+      if (isnan(cm)) Serial.println("DIST,NA");
+      else { Serial.print("DIST,"); Serial.println(cm, 1); }
+    } else {
+      Serial.println("DIST,NA");
+    }
+    return;
+  }
   if (line == "STOP") { handle_command("S"); return; }
   if (line == "SPINL") { handle_command("L"); return; }
   if (line == "SPINR") { handle_command("R"); return; }
