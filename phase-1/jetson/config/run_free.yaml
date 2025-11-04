@@ -2,6 +2,12 @@
 pairing_seconds: 0
 max_seconds: 60
 
+# Ensure correct serial link in runtime
+serial:
+  port: /dev/ttyACM0
+  baud: 115200
+  timeout_ms: 200
+
 thresholds_cm:
   slow_enter: 0
   slow_exit: 1
@@ -11,10 +17,12 @@ thresholds_cm:
   stop_exit: 1
 
 cadence_ms:
-  rescan_ms: 1000
+  rescan_ms: 200
+  servo_settle_ms: 150
+  meas_cooldown_ms: 60
 
 sweep:
-  step_deg: 30
+  step_deg: 15
   samples_per_point: 1
 
 
