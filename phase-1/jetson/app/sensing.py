@@ -67,6 +67,7 @@ class SensingOrchestrator:
         return angles
 
     def _send_servo(self, deg: int):
+        print(f"[SENSING] Sending SERVO,{deg} (cycle_index={self._cycle_index}/{len(self._angles_cycle)})")
         self._link.send_command(f"SERVO,{deg}")
         self._servo_move_ms = self._now_ms()
         self._awaiting_ping = False
@@ -86,6 +87,9 @@ class SensingOrchestrator:
             line = self._link.read_line()
             if not line:
                 break
+            # Debug: print all serial lines received
+            if line.startswith("DBG") or line.startswith("DIST") or line.startswith("STAT"):
+                print(f"[SENSING] RX: {line}")
             if line.startswith("DIST,"):
                 parts = line.split(",", 1)
                 if len(parts) == 2 and parts[1] != "NA":
@@ -94,6 +98,7 @@ class SensingOrchestrator:
                         v = parts[1].strip().replace(",", ".")
                         cm = float(v)
                         self._samples.append(cm)
+                        print(f"[SENSING] Sample collected: {cm} cm (total: {len(self._samples)}/{self._samples_per_point})")
                     except ValueError:
                         pass
                 # We received a reply for the last PING
@@ -150,7 +155,9 @@ class SensingOrchestrator:
                 self._dist_right = m
                 self._last_valid_right_ms = now
             # Advance cycle
+            old_idx = self._cycle_index
             self._cycle_index = (self._cycle_index + 1) % len(self._angles_cycle)
+            print(f"[SENSING] Angle complete: {angle}° → {m:.1f}cm. Advancing {old_idx}→{self._cycle_index}")
             self._servo_move_ms = 0
             self._awaiting_ping = False
             self._samples = []
