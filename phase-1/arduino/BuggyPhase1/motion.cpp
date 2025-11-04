@@ -101,12 +101,10 @@ void motion_tick() {
     global_pwm = g_pwm_override;
   }
   // Apply global speed tier via OE (active-LOW)
-  #if BENCH_MODE
-    // In Bench Mode, avoid PWM on OE to prevent timer conflicts; treat any >0 as fully enabled
-    digitalWrite(SR_OE, (global_pwm > 0) ? LOW : HIGH);
-  #else
-    analogWrite(SR_OE, 255 - constrain(global_pwm, 0, 255));
-  #endif
+  // IMPORTANT: Use digitalWrite (not analogWrite) to avoid timer conflicts with Servo library
+  // The Servo library on UNO R4 uses the same timer as analogWrite on pin 7 (SR_OE)
+  // This loses smooth PWM speed control, but allows servo to function
+  digitalWrite(SR_OE, (global_pwm > 0) ? LOW : HIGH);
 
   // Pulse-gate sides that should be "slow" under a FAST global tier (arcs)
   unsigned long now = millis();
