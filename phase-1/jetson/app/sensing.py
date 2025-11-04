@@ -109,6 +109,7 @@ class SensingOrchestrator:
         now = self._now_ms()
         # If a ping reply seems lost/stale, clear await to allow retry/advance
         if self._awaiting_ping and (now - self._last_ping_ms) >= max(200, self._meas_cooldown_ms * 3):
+            print(f"[SENSING] Ping timeout, clearing await flag")
             self._awaiting_ping = False
         # If time to scan a new point
         if now - self._last_scan_ms >= self._rescan_ms and not self._awaiting_ping and not self._samples:
@@ -119,9 +120,11 @@ class SensingOrchestrator:
 
         # After servo settle, start pinging until we collect samples_per_point
         if (self._servo_move_ms > 0 and now - self._servo_move_ms >= self._servo_settle_ms):
+            print(f"[SENSING] Servo settled, samples={len(self._samples)}/{self._samples_per_point}, awaiting_ping={self._awaiting_ping}, attempts={self._attempts}/{self._max_attempts_per_point}")
             if len(self._samples) < self._samples_per_point and not self._awaiting_ping:
                 # Respect measurement cooldown between pings; stop after too many attempts
                 if self._attempts >= self._max_attempts_per_point:
+                    print(f"[SENSING] Max attempts reached, giving up on angle {self._angles_cycle[self._cycle_index]}")
                     # Give up on this angle for now; advance with NaN
                     angle = self._angles_cycle[self._cycle_index]
                     if angle == self._center_deg:
@@ -136,6 +139,7 @@ class SensingOrchestrator:
                     self._samples = []
                     self._attempts = 0
                 elif len(self._samples) == 0 or (now - self._last_ping_ms >= self._meas_cooldown_ms):
+                    print(f"[SENSING] Sending PING (attempt {self._attempts + 1})")
                     self._send_ping()
 
         # Read any incoming distance lines
