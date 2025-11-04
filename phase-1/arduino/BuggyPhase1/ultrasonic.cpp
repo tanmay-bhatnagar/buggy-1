@@ -30,6 +30,9 @@ float ultrasonic_measure_cm() {
   // Ensure servo is settled before pinging to avoid echo contamination
   extern bool servo_is_settled();
   if (!servo_is_settled()) {
+    #if BENCH_MODE
+    Serial.println("DBG uls_measure: servo not settled");
+    #endif
     g_last_cm = NAN;
     g_last_ping_ms = millis();
     return g_last_cm;
@@ -41,7 +44,14 @@ float ultrasonic_measure_cm() {
   digitalWrite(ULTRASONIC_TRIG, LOW);
 
   unsigned long duration = pulseIn(ULTRASONIC_ECHO, HIGH, 30000UL);
+  #if BENCH_MODE
+  Serial.print("DBG uls_measure: duration_us=");
+  Serial.println(duration);
+  #endif
   if (duration == 0) {
+    #if BENCH_MODE
+    Serial.println("DBG uls_measure: TIMEOUT (no echo received)");
+    #endif
     g_last_cm = NAN;
     g_last_ping_ms = millis();
     return g_last_cm;
@@ -49,6 +59,12 @@ float ultrasonic_measure_cm() {
   float cm = (float)duration / 58.0f;
   g_last_cm = clamp_cm(cm);
   g_last_ping_ms = millis();
+  #if BENCH_MODE
+  Serial.print("DBG uls_measure: raw_cm=");
+  Serial.print(cm, 1);
+  Serial.print(" clamped=");
+  if (isnan(g_last_cm)) Serial.println("NA"); else Serial.println(g_last_cm, 1);
+  #endif
   return g_last_cm;
 }
 

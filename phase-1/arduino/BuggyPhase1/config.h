@@ -8,7 +8,7 @@
 //                 silent by default (no periodic status), boot banner includes "+BENCH".
 //   - Runtime Mode: short heartbeat timeout; Jetson app must send HB.
 // Flip this flag and reflash to switch modes.
-#define BENCH_MODE 0
+#define BENCH_MODE 1
 
 // Default verbosity in Bench Mode: 0 = fully silent (no periodic STAT)
 // You can toggle at runtime via VERBOSE,ON / VERBOSE,OFF in the serial console.
