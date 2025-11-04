@@ -39,29 +39,18 @@ int servo_get_target_deg() { return g_target_deg; }
 int servo_get_current_deg() { return g_current_deg; }
 
 void servo_tick() {
-  // Detach after settle to keep quiet at idle
-  #if BENCH_MODE
-    // Keep servo attached in Bench Mode to avoid disabling PWM timers that
-    // may be shared with motor OE PWM on some cores/boards.
-  #else
-    if (g_attached && servo_is_settled()) {
-      g_servo.detach();
-      g_attached = false;
-      // Ensure line held low
-      pinMode(SERVO_PIN, OUTPUT);
-      digitalWrite(SERVO_PIN, LOW);
-    }
-  #endif
+  // Keep servo attached during runtime for continuous scanning
+  // Detaching causes issues with the autonomous sweep behavior
+  // The servo needs to remain attached to respond quickly to new positions
+  
+  // Note: If jitter becomes an issue, we can add a longer idle timeout
+  // before detaching (e.g., only detach if no movement for 5+ seconds)
 }
 
 void servo_stopSweep() {
   g_sweeping = false;
-  if (g_attached && servo_is_settled()) {
-    g_servo.detach();
-    g_attached = false;
-    pinMode(SERVO_PIN, OUTPUT);
-    digitalWrite(SERVO_PIN, LOW);
-  }
+  // Keep servo attached even when stopping sweep
+  // This allows quick response to new positioning commands
 }
 
 void servo_startSweep() {
