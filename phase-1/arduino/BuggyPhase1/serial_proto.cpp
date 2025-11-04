@@ -43,6 +43,8 @@ static void handle_command(const String& line) {
   if (line == "VERBOSE,ON") { status_set_verbose(true); return; }
   if (line == "VERBOSE,OFF") { status_set_verbose(false); return; }
   if (line == "H") { Serial.println("CMD: F/B/L/R<n>, S, P<deg>, T<n>, Q, H"); return; }
+  // Heartbeat - just update watchdog, no reply needed
+  if (line == "HB") { watchdog_note_hb(); return; }
 
   char c = line.charAt(0);
   String arg = line.substring(1);
