@@ -100,6 +100,9 @@ class SensingOrchestrator:
 
     def tick(self):
         now = self._now_ms()
+        # If a ping reply seems lost/stale, clear await to allow retry/advance
+        if self._awaiting_ping and (now - self._last_ping_ms) >= max(200, self._meas_cooldown_ms * 3):
+            self._awaiting_ping = False
         # If time to scan a new point
         if now - self._last_scan_ms >= self._rescan_ms and not self._awaiting_ping and not self._samples:
             target = self._angles_cycle[self._cycle_index]
