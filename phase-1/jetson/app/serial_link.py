@@ -28,7 +28,9 @@ class SerialLink:
 
     def send_command(self, line: str):
         payload = (line.strip() + "\n").encode("utf-8")
+        print(f"[SERIAL] TX: {line.strip()}")
         if not self._ser:
+            print("[SERIAL] Not connected for send, attempting reconnect...")
             # try reconnect
             time.sleep(0.5)
             self._connect()
@@ -37,7 +39,8 @@ class SerialLink:
                 self._ser.write(payload)
                 self._ser.flush()
                 self._last_send = time.time()
-        except Exception:
+        except Exception as e:
+            print(f"[SERIAL] Send exception: {e}")
             # attempt reconnect once
             try:
                 if self._ser:
@@ -57,14 +60,20 @@ class SerialLink:
 
     def read_line(self) -> Optional[str]:
         if not self._ser:
+            print("[SERIAL] Not connected, attempting reconnect...")
             time.sleep(0.5)
             self._connect()
         try:
             raw = self._ser.readline() if self._ser else b""
             if not raw:
                 return None
-            return raw.decode("utf-8", errors="ignore").strip()
-        except Exception:
+            decoded = raw.decode("utf-8", errors="ignore").strip()
+            # Debug: show all raw bytes received
+            if decoded:
+                print(f"[SERIAL] RX raw: {repr(raw)} → {repr(decoded)}")
+            return decoded
+        except Exception as e:
+            print(f"[SERIAL] Read exception: {e}")
             # reconnect and give up this cycle
             try:
                 if self._ser:
