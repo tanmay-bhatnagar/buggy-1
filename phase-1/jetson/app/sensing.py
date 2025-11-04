@@ -90,7 +90,9 @@ class SensingOrchestrator:
                 parts = line.split(",", 1)
                 if len(parts) == 2 and parts[1] != "NA":
                     try:
-                        cm = float(parts[1])
+                        # Accept both 5.3 and 5,3 formats
+                        v = parts[1].strip().replace(",", ".")
+                        cm = float(v)
                         self._samples.append(cm)
                     except ValueError:
                         pass
