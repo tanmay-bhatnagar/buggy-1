@@ -107,6 +107,7 @@ class SensingOrchestrator:
 
     def tick(self):
         now = self._now_ms()
+        print(f"[SENSING DEBUG] tick() called: servo_move_ms={self._servo_move_ms}, now={now}, diff={now - self._servo_move_ms if self._servo_move_ms > 0 else 0}, settle_ms={self._servo_settle_ms}")
         # If a ping reply seems lost/stale, clear await to allow retry/advance
         if self._awaiting_ping and (now - self._last_ping_ms) >= max(200, self._meas_cooldown_ms * 3):
             print(f"[SENSING] Ping timeout, clearing await flag")
