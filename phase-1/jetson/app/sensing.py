@@ -67,6 +67,10 @@ class SensingOrchestrator:
         return angles
 
     def _send_servo(self, deg: int):
+        # Don't resend if already at this angle (avoids resetting settle timer)
+        if deg == self._current_servo_deg and self._servo_move_ms > 0:
+            print(f"[SENSING] Servo already at {deg}°, skipping redundant command")
+            return
         print(f"[SENSING] Sending SERVO,{deg} (cycle_index={self._cycle_index}/{len(self._angles_cycle)})")
         self._link.send_command(f"SERVO,{deg}")
         self._servo_move_ms = self._now_ms()
