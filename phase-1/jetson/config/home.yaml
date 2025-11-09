@@ -20,9 +20,9 @@ thresholds_cm:
   min_valid: 2            # Accept readings down to 2cm (very close obstacles)
   max_valid: 300
 
-# Fast scanning, methodical decisions
+# Fast scanning, quick decisions
 cadence_ms:
-  rescan_ms: 450          # Scan every 450ms (deliberate decision-making)
+  rescan_ms: 250          # Scan every 250ms (faster reaction time)
   min_turn_ms: 1200       # Commit to turns for 1.2s (finish what you start)
   backoff_ms: 100         # Minimal reverse (~4-5cm only)
   stall_timer_ms: 4000    # More patience before giving up
