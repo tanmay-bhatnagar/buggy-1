@@ -1,8 +1,8 @@
 # Home indoor profile: Conservative, slow movement in tight spaces
 # Designed for environments with close obstacles (furniture, walls, etc.)
 
-pairing_seconds: 0        # Start immediately
-max_seconds: 30           # Run for 30 seconds
+pairing_seconds: 30       # 30 second countdown before buggy starts moving
+max_seconds: 30           # Run for 30 seconds after countdown
 
 serial:
   port: /dev/ttyACM0
@@ -37,11 +37,11 @@ sweep:
   center_trim_deg: 0
   samples_per_point: 3    # Take 3 samples per angle (more reliable)
 
-# Slow, cautious speed (even FAST is slow)
+# Very slow, ultra-cautious speed for tight spaces
 pwm:
-  fast: 180               # "Fast" is actually moderate
-  slow: 130               # Slow is very gentle
-  ramp_ms: 250
+  fast: 160               # "Fast" is actually quite slow
+  slow: 120               # Slow is crawling speed
+  ramp_ms: 300
 
 watchdog:
   hb_period_ms: 200
