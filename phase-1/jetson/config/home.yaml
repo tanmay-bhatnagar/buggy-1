@@ -17,7 +17,7 @@ thresholds_cm:
   turn_exit: 65           # Resume forward when > 65 cm
   stop_enter: 30          # STOP + BACKOFF when < 30 cm
   stop_exit: 45           # Resume when > 45 cm
-  min_valid: 3
+  min_valid: 2            # Accept readings down to 2cm (very close obstacles)
   max_valid: 300
 
 # Slower scanning cadence for careful navigation
