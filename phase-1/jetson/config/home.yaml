@@ -20,12 +20,12 @@ thresholds_cm:
   min_valid: 2            # Accept readings down to 2cm (very close obstacles)
   max_valid: 300
 
-# Slower scanning cadence for careful navigation
+# Ultra-methodical cadence - slow, calculated decisions
 cadence_ms:
-  rescan_ms: 300          # Scan every 300ms (slower, more deliberate)
-  min_turn_ms: 900        # Commit to turns longer (very deliberate, avoid thrashing)
-  backoff_ms: 200         # Very short reverse (minimal backing up)
-  stall_timer_ms: 3000    # Allow more time to find path
+  rescan_ms: 450          # Scan every 450ms (very deliberate, think before act)
+  min_turn_ms: 1200       # Commit to turns for 1.2s (finish what you start)
+  backoff_ms: 100         # Minimal reverse (~4-5cm only)
+  stall_timer_ms: 4000    # More patience before giving up
   meas_cooldown_ms: 50    # Slightly more spacing between pings
   servo_settle_ms: 150    # Full settle time
 
@@ -37,11 +37,11 @@ sweep:
   center_trim_deg: 0
   samples_per_point: 3    # Take 3 samples per angle (more reliable)
 
-# Very slow, ultra-cautious speed for tight spaces
+# Ultra-slow, hyper-cautious speed - deliberate movement
 pwm:
-  fast: 160               # "Fast" is actually quite slow
-  slow: 120               # Slow is crawling speed
-  ramp_ms: 300
+  fast: 150               # "Fast" is very slow
+  slow: 110               # Slow is ultra-crawling
+  ramp_ms: 350            # Gentle acceleration
 
 watchdog:
   hb_period_ms: 200
