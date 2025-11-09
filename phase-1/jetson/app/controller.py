@@ -61,8 +61,8 @@ class ControlStateMachine:
 
     def _decide_action(self, dl: float, dc: float, dr: float):
         now = self._now_ms()
-        # Safety: backoff on immediate obstacle
-        if dc < self._hyst.stop_enter:
+        # Safety: backoff on immediate obstacle (only trigger once, don't retrigger)
+        if dc < self._hyst.stop_enter and self._state != "BACKOFF":
             self._state = "BACKOFF"
             self._backoff_until_ms = now + self._backoff_ms
             return f"B,SLOW", "BACKOFF"
