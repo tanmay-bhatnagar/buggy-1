@@ -26,7 +26,7 @@ cadence_ms:
   min_turn_ms: 1200       # Commit to turns for 1.2s (finish what you start)
   backoff_ms: 100         # Minimal reverse (~4-5cm only)
   stall_timer_ms: 4000    # More patience before giving up
-  meas_cooldown_ms: 30    # Fast ping spacing (was 50ms)
+  meas_cooldown_ms: 40    # Safe ping spacing for HC-SR04 (avoids echo interference)
   servo_settle_ms: 80     # Quick settle (was 150ms)
 
 # Fast 7-angle sweep with quick rotation
