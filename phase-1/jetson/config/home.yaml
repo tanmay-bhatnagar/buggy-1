@@ -1,0 +1,54 @@
+# Home indoor profile: Conservative, slow movement in tight spaces
+# Designed for environments with close obstacles (furniture, walls, etc.)
+
+pairing_seconds: 0        # Start immediately
+max_seconds: 30           # Run for 30 seconds
+
+serial:
+  port: /dev/ttyACM0
+  baud: 115200
+  timeout_ms: 200
+
+# Conservative thresholds - stop early, turn early, go slow early
+thresholds_cm:
+  slow_enter: 80          # Drop to SLOW when center < 80 cm (very early)
+  slow_exit: 100          # Back to FAST when > 100 cm (rarely happens indoors)
+  turn_enter: 50          # Start turning when < 50 cm
+  turn_exit: 65           # Resume forward when > 65 cm
+  stop_enter: 30          # STOP + BACKOFF when < 30 cm
+  stop_exit: 45           # Resume when > 45 cm
+  min_valid: 3
+  max_valid: 300
+
+# Slower scanning cadence for careful navigation
+cadence_ms:
+  rescan_ms: 300          # Scan every 300ms (slower, more deliberate)
+  min_turn_ms: 700        # Commit to turns longer (avoid dithering)
+  backoff_ms: 600         # Longer reverse when too close
+  stall_timer_ms: 3000    # Allow more time to find path
+  meas_cooldown_ms: 50    # Slightly more spacing between pings
+  servo_settle_ms: 150    # Full settle time
+
+# More thorough sweeping in tight spaces
+sweep:
+  left_deg: 135
+  right_deg: 45
+  step_deg: 15
+  center_trim_deg: 0
+  samples_per_point: 3    # Take 3 samples per angle (more reliable)
+
+# Slow, cautious speed (even FAST is slow)
+pwm:
+  fast: 180               # "Fast" is actually moderate
+  slow: 130               # Slow is very gentle
+  ramp_ms: 250
+
+watchdog:
+  hb_period_ms: 200
+  hb_timeout_ms: 600
+
+logging:
+  csv_path: logs/home_run.csv
+  console_hud: true
+  include_latency_ms: true
+
