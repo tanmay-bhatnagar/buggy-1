@@ -15,7 +15,7 @@ thresholds_cm:
   slow_exit: 100          # Back to FAST when > 100 cm (rarely happens indoors)
   turn_enter: 50          # Start turning when < 50 cm
   turn_exit: 65           # Resume forward when > 65 cm
-  stop_enter: 30          # STOP + BACKOFF when < 30 cm
+  stop_enter: 25          # STOP + BACKOFF when < 25 cm (closer approach)
   stop_exit: 45           # Resume when > 45 cm
   min_valid: 2            # Accept readings down to 2cm (very close obstacles)
   max_valid: 300
@@ -23,8 +23,8 @@ thresholds_cm:
 # Slower scanning cadence for careful navigation
 cadence_ms:
   rescan_ms: 300          # Scan every 300ms (slower, more deliberate)
-  min_turn_ms: 700        # Commit to turns longer (avoid dithering)
-  backoff_ms: 600         # Longer reverse when too close
+  min_turn_ms: 900        # Commit to turns longer (very deliberate, avoid thrashing)
+  backoff_ms: 200         # Very short reverse (minimal backing up)
   stall_timer_ms: 3000    # Allow more time to find path
   meas_cooldown_ms: 50    # Slightly more spacing between pings
   servo_settle_ms: 150    # Full settle time
