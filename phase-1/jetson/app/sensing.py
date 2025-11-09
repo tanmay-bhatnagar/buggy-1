@@ -48,32 +48,21 @@ class SensingOrchestrator:
         return self._current_servo_deg
 
     def _build_angles_cycle(self):
-        # Center-heavy pattern: always return to center between side scans
-        # Pattern: CENTER → RIGHT → CENTER → LEFT → CENTER (safer for forward movement)
-        angles = []
-        angles.append(self._center_deg)  # Start at center
+        # Simple 5-angle alternating pattern: CENTER → RIGHT → CENTER → LEFT → CENTER
+        # Alternates sides for balanced coverage while keeping center priority
+        angles = [self._center_deg]  # Start at center
         
-        # Add right side angles, returning to center after each
-        k = 1
-        while True:
-            right = self._center_deg - k * self._step_deg
-            if right >= self._right_deg:
-                angles.append(right)
-                angles.append(self._center_deg)  # Return to center
-                k += 1
-            else:
-                break
+        # Only scan one step to each side (5 angles total)
+        right = self._center_deg - self._step_deg
+        left = self._center_deg + self._step_deg
         
-        # Add left side angles, returning to center after each
-        k = 1
-        while True:
-            left = self._center_deg + k * self._step_deg
-            if left <= self._left_deg:
-                angles.append(left)
-                angles.append(self._center_deg)  # Return to center
-                k += 1
-            else:
-                break
+        if right >= self._right_deg:
+            angles.append(right)
+            angles.append(self._center_deg)  # Return to center
+        
+        if left <= self._left_deg:
+            angles.append(left)
+            angles.append(self._center_deg)  # Return to center
         
         return angles
 

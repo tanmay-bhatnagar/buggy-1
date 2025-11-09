@@ -24,18 +24,18 @@ thresholds_cm:
 cadence_ms:
   rescan_ms: 250          # Scan every 250ms (faster reaction time)
   min_turn_ms: 1200       # Commit to turns for 1.2s (finish what you start)
-  backoff_ms: 100         # Minimal reverse (~4-5cm only)
+  backoff_ms: 500         # Slow, deliberate reverse
   stall_timer_ms: 4000    # More patience before giving up
   meas_cooldown_ms: 40    # Safe ping spacing for HC-SR04 (avoids echo interference)
   servo_settle_ms: 80     # Quick settle (was 150ms)
 
-# Fast 7-angle sweep with quick rotation
+# Simple 5-angle alternating sweep
 sweep:
   left_deg: 135
   right_deg: 45
-  step_deg: 15            # All 7 angles: 90°→75°→105°→60°→120°→45°→135°
+  step_deg: 15            # Pattern: 90° → 75° → 90° → 105° → 90° (5 angles)
   center_trim_deg: 0
-  samples_per_point: 2    # 2 samples per angle (faster than 3)
+  samples_per_point: 2    # 2 samples per angle
 
 # Extremely slow, precision crawling speed
 pwm:
