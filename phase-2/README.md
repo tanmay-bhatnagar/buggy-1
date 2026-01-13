@@ -2,14 +2,44 @@
 
 Train a custom YOLO model to detect and follow you specifically, deployed on Jetson Orin Nano.
 
+---
+
+## ⚠️ Current Status
+
+| Component | Status |
+|-----------|--------|
+| **Mac Pipeline** | ✅ Ready (Not Tested) |
+| **Jetson Pipeline** | ⏳ Pending (awaiting model weights) |
+
+---
+
 ## Overview
 
 | Component | Details |
 |-----------|---------|
-| **Model** | YOLO11n (or YOLOv8n) |
+| **Model** | YOLO11n |
 | **Classes** | `tanmay` (0), `other_person` (1) |
 | **Training** | Mac M3 (MPS) |
 | **Deployment** | Jetson Orin Nano (TensorRT) |
+
+---
+
+## ⚠️ Important: Class Order
+
+> [!CAUTION]
+> **Label Studio exports classes in alphabetical order**, which differs from our expected order.
+> 
+> | Source | Order |
+> |--------|-------|
+> | Label Studio export | `other_person=0`, `tanmay=1` |
+> | Our `data.yaml` | `tanmay=0`, `other_person=1` |
+> 
+> **The `00b_process_export.py` script automatically fixes this** by:
+> 1. Detecting the mismatch
+> 2. Remapping class IDs in all label files
+> 3. Writing a corrected `classes.txt`
+> 
+> **Always run `00b_process_export.py` after exporting from Label Studio!**
 
 ---
 
@@ -68,11 +98,11 @@ Open http://localhost:8080
 - Tight fit, minimal padding
 - For partial visibility, box what's visible
 
-### 2.4 Export
-1. Export → YOLO format → Download
-2. Extract to `dataset/annotated/`
-3. Process export:
+### 2.4 Export & Process
 ```bash
+# Export from Label Studio → YOLO format → extract to dataset/annotated/
+
+# CRITICAL: Process export (fixes class order!)
 python scripts/00b_process_export.py --dry-run  # Preview
 python scripts/00b_process_export.py             # Apply
 ```
@@ -80,16 +110,15 @@ python scripts/00b_process_export.py             # Apply
 ### 2.5 Copy Images
 Copy your raw images to match the labels:
 ```bash
-# TODO: Script to automate this (01_copy_images.py)
 cp dataset/raw/tanmay/*.jpg dataset/annotated/images/
 cp dataset/raw/other_person/*.jpg dataset/annotated/images/
+cp dataset/raw/background/*.jpg dataset/annotated/images/
 ```
 
 ---
 
 ## Step 3: Augmentation
 
-Augment images to simulate buggy-view perspective:
 ```bash
 python scripts/02_augment.py --dry-run
 python scripts/02_augment.py
@@ -101,131 +130,53 @@ python scripts/02_augment.py
 - Motion blur
 - Scale variation
 
-Result: `dataset/augmented/` with 3-5x more images
+Result: `dataset/augmented/` with 4x images (1 orig + 3 augmented per image)
 
 ---
 
 ## Step 4: Train/Val Split
 
-Split data 80/20 for training:
 ```bash
+python scripts/03_split_dataset.py --dry-run
 python scripts/03_split_dataset.py
 ```
 
-Result:
-```
-dataset/train/images/  # 80% of data
-dataset/train/labels/
-dataset/val/images/    # 20% of data
-dataset/val/labels/
-```
+Result: 80% train, 20% val (stratified by class)
 
 ---
 
 ## Step 5: Training
 
-### 5.1 Configure
-Edit `dataset/data.yaml`:
-```yaml
-path: /path/to/phase-2/dataset
-train: train/images
-val: val/images
-names:
-  0: tanmay
-  1: other_person
-```
-
-### 5.2 Train
 ```bash
 python scripts/04_train.py
-# Or directly:
-yolo detect train model=yolo11n.pt data=dataset/data.yaml epochs=100 imgsz=640 device=mps
+# Or with options:
+python scripts/04_train.py --epochs 50 --batch 8
 ```
 
 Training time: ~10-20 minutes on M3
-
-### 5.3 Evaluate
-Check `training/runs/tanmay_detector/`:
-- `results.png` - training curves
-- `confusion_matrix.png`
-- `weights/best.pt` - best model
-
-Target: mAP50 > 0.85
 
 ---
 
 ## Step 6: Export for Jetson
 
-### 6.1 Export to ONNX (on Mac)
 ```bash
 python scripts/05_export.py
 # Creates: models/best.onnx
 ```
 
-### 6.2 Copy to Jetson
-```bash
-scp models/best.onnx jetson@<jetson-ip>:~/buggy/phase-2/models/
-```
+---
 
-### 6.3 Convert to TensorRT (on Jetson)
+## Step 7: Jetson Deployment (TODO)
+
 ```bash
+# Copy to Jetson
+scp models/best.onnx jetson@<ip>:~/buggy/models/
+
+# Convert to TensorRT (on Jetson)
 trtexec --onnx=best.onnx --saveEngine=best.engine --fp16
-```
 
----
-
-## Step 7: Deployment
-
-Run on Jetson:
-```bash
-python jetson/app/main.py --config config/follow.yaml
-```
-
----
-
-## Folder Structure
-
-```
-phase-2/
-├── README.md                    # This file
-├── requirements.txt
-├── dataset/
-│   ├── raw/                     # Original images
-│   │   ├── tanmay/
-│   │   ├── other_person/
-│   │   └── background/
-│   ├── annotated/               # After Label Studio + export processing
-│   │   ├── images/
-│   │   └── labels/
-│   ├── augmented/               # After augmentation
-│   │   ├── images/
-│   │   └── labels/
-│   ├── train/                   # Training split
-│   │   ├── images/
-│   │   └── labels/
-│   ├── val/                     # Validation split
-│   │   ├── images/
-│   │   └── labels/
-│   ├── data.yaml                # YOLO dataset config
-│   └── label_studio_config.xml  # Label Studio interface config
-├── scripts/
-│   ├── 00_add_prefixes.py       # Rename raw images with class prefixes
-│   ├── 00b_process_export.py    # Strip hash from Label Studio export
-│   ├── 01_copy_images.py        # Copy images to match labels (TODO)
-│   ├── 02_augment.py            # Apply augmentations (TODO)
-│   ├── 03_split_dataset.py      # Train/val split (TODO)
-│   ├── 04_train.py              # Training wrapper (TODO)
-│   ├── 05_export.py             # ONNX export (TODO)
-│   └── start_label_studio.sh    # Launch Label Studio
-├── training/
-│   └── runs/                    # Training outputs (auto-generated)
-├── models/
-│   ├── best.pt                  # Best PyTorch weights
-│   ├── best.onnx                # ONNX export
-│   └── best.engine              # TensorRT (on Jetson)
-└── jetson/
-    ├── app/                     # Deployment code (TODO)
-    └── config/
+# Run (TODO: jetson app not yet created)
+python jetson/app/main.py
 ```
 
 ---
@@ -235,10 +186,32 @@ phase-2/
 | Script | Status | Description |
 |--------|--------|-------------|
 | `00_add_prefixes.py` | ✅ Ready | Rename images with class prefixes |
-| `00b_process_export.py` | ✅ Ready | Process Label Studio export |
+| `00b_process_export.py` | ✅ Ready | Process Label Studio export (fixes class order!) |
 | `start_label_studio.sh` | ✅ Ready | Launch annotation tool |
-| `01_copy_images.py` | ⬜ TODO | Copy images to annotated/ |
-| `02_augment.py` | ⬜ TODO | Perspective + augmentation |
-| `03_split_dataset.py` | ⬜ TODO | 80/20 train/val split |
-| `04_train.py` | ⬜ TODO | YOLO training |
-| `05_export.py` | ⬜ TODO | ONNX export |
+| `02_augment.py` | ✅ Ready | Perspective + augmentation |
+| `03_split_dataset.py` | ✅ Ready | 80/20 train/val split |
+| `04_train.py` | ✅ Ready | YOLO11n training |
+| `05_export.py` | ✅ Ready | ONNX export |
+| `jetson/app/main.py` | ⏳ TODO | Jetson inference + follow logic |
+
+---
+
+## Folder Structure
+
+```
+phase-2/
+├── README.md
+├── requirements.txt
+├── dataset/
+│   ├── raw/                     # Original images
+│   ├── annotated/               # After Label Studio
+│   ├── augmented/               # After augmentation
+│   ├── train/                   # Training split
+│   ├── val/                     # Validation split
+│   ├── data.yaml                # YOLO config
+│   └── label_studio_config.xml  # Label Studio config
+├── scripts/                     # All pipeline scripts
+├── training/runs/               # Training outputs
+├── models/                      # Exported models
+└── jetson/                      # Jetson deployment (TODO)
+```
