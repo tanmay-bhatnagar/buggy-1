@@ -1,2 +1,27 @@
+# macOS
 .DS_Store
 
+# Environment
+.env
+
+# Logs
+jetson/logs/
+jetson/telemetry_phase1.csv
+
+# Phase 2 - Dataset (contains personal images)
+phase-2/dataset/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Training outputs (large files)
+phase-2/training/runs/
+phase-2/models/*.pt
+phase-2/models/*.onnx
+phase-2/models/*.engine
+
+# IDE
+.vscode/
+.idea/

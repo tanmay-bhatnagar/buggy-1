@@ -56,12 +56,12 @@ class SensingOrchestrator:
         right = self._center_deg - self._step_deg
         left = self._center_deg + self._step_deg
         
-        if right >= self._right_deg:
-            angles.append(right)
+            if right >= self._right_deg:
+                angles.append(right)
             angles.append(self._center_deg)  # Return to center
         
-        if left <= self._left_deg:
-            angles.append(left)
+            if left <= self._left_deg:
+                angles.append(left)
             angles.append(self._center_deg)  # Return to center
         
         return angles

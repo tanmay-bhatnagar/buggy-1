@@ -1,8 +1,10 @@
-# Phase 1 – Locomotion (Jetson Buggy)
+# Phase 1 – Locomotion (Jetson Buggy) ✅ COMPLETE
 
 ## 1) Overview of Phase 1
 
 **Goal:** reliable obstacle‑aware locomotion with two speed tiers (FAST/SLOW) using an ultrasonic sensor on a pan servo. Intelligence and fancier behaviors are Phase 2.
+
+**Status:** ✅ **Phase 1 Complete** - Buggy successfully navigates autonomously with obstacle avoidance, multiple speed profiles, and robust sensor integration.
 
 **Runtime storyboard:**
 
@@ -37,10 +39,11 @@
 
 ### 2.2 L293D shield + 74HC595 (global OE, no per‑wheel PWM)
 
-- Direction lines are driven through a **74HC595** (Q0..Q7). The register’s **OE is on D7** and is **active‑LOW**; we drive global speed via PWM on OE (duty is inverted: `analogWrite(255 − pwm)`).
+- Direction lines are driven through a **74HC595** (Q0..Q7). The register's **OE is on D7** and is **active‑LOW**; we drive global speed via PWM on OE (duty is inverted: `analogWrite(255 − pwm)`).
 - There is no per‑wheel or per‑side EN available in this build; all motors share the single OE line.
 - **ARC** is implemented by keeping OE at the chosen tier and briefly pulsing the inner‑side motor bits OFF using `SLOW_PULSE_ON_MS` / `SLOW_PULSE_OFF_MS` (fake a slower track without side EN).
 - Upshot for Phase‑1: we run **two speed tiers** (FAST/SLOW) globally and shape arcs via bit‑pulsing; this is sufficient for stable avoidance.
+- **Note:** See `phase_1_completion_notes.md` for details on UNO R4 timer conflict with cheap HW-130 shield clone.
 
 ### 2.3 I²C / IMU pin budget (for later)
 

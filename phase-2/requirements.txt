@@ -1,0 +1,11 @@
+# YOLO Training & Data Processing
+ultralytics>=8.3.0
+opencv-python>=4.8.0
+albumentations>=1.3.0
+numpy>=1.24.0
+Pillow>=9.0.0
+PyYAML>=6.0
+tqdm>=4.65.0
+
+# Annotation (optional - can use web tools instead)
+# label-studio>=1.10.0
