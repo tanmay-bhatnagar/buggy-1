@@ -20,7 +20,6 @@ import os
 import re
 import shutil
 import argparse
-import glob
 from pathlib import Path
 
 # Paths relative to script location
@@ -75,13 +74,42 @@ def process_export(export_folder: Path, output_folder: Path, dry_run: bool = Fal
         output_labels.mkdir(parents=True, exist_ok=True)
         output_images.mkdir(parents=True, exist_ok=True)
     
-    # Copy classes.txt
+    # CRITICAL: Check class order and build remap if needed
+    # Expected order: tanmay=0, other_person=1
+    expected_order = ["tanmay", "other_person"]
+    remap = None
+    
     if classes_file.exists():
+        with open(classes_file, 'r') as f:
+            exported_classes = [line.strip() for line in f if line.strip()]
+        
+        if exported_classes != expected_order:
+            print(f"⚠️  Class order mismatch detected!")
+            print(f"    Label Studio: {exported_classes}")
+            print(f"    Expected:     {expected_order}")
+            
+            # Build remap: exported_idx -> correct_idx
+            remap = {}
+            for exp_idx, cls_name in enumerate(exported_classes):
+                if cls_name in expected_order:
+                    correct_idx = expected_order.index(cls_name)
+                    if exp_idx != correct_idx:
+                        remap[exp_idx] = correct_idx
+            
+            if remap:
+                print(f"    Remapping: {remap}")
+            print()
+        else:
+            print(f"✅ Class order correct: {exported_classes}")
+        
         if dry_run:
             print(f"📋 Would copy classes.txt → {output_folder}/classes.txt")
         else:
-            shutil.copy2(classes_file, output_folder / "classes.txt")
-            print(f"📋 Copied classes.txt")
+            # Write corrected classes.txt
+            with open(output_folder / "classes.txt", 'w') as f:
+                for cls in expected_order:
+                    f.write(f"{cls}\n")
+            print(f"📋 Wrote corrected classes.txt")
     
     # Process label files
     label_files = list(labels_dir.glob("*.txt"))
@@ -94,7 +122,25 @@ def process_export(export_folder: Path, output_folder: Path, dry_run: bool = Fal
         if dry_run:
             print(f"  → {old_name} → {new_name}")
         else:
-            shutil.copy2(label_file, output_labels / new_name)
+            # Read, remap if needed, and write
+            if remap:
+                with open(label_file, 'r') as f:
+                    lines = f.readlines()
+                
+                remapped_lines = []
+                for line in lines:
+                    parts = line.strip().split()
+                    if len(parts) >= 5:
+                        cls_id = int(parts[0])
+                        if cls_id in remap:
+                            parts[0] = str(remap[cls_id])
+                        remapped_lines.append(' '.join(parts) + '\n')
+                
+                with open(output_labels / new_name, 'w') as f:
+                    f.writelines(remapped_lines)
+            else:
+                shutil.copy2(label_file, output_labels / new_name)
+            
             print(f"  ✓ {old_name} → {new_name}")
     
     return True
