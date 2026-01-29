@@ -34,6 +34,7 @@ def get_class_from_label(label_path: Path) -> str:
         first_line = f.readline().strip()
         if first_line:
             cls_id = int(first_line.split()[0])
+            # Class mapping: tanmay=0, other_person=1 (matches training config)
             return {0: "tanmay", 1: "other_person"}.get(cls_id, "unknown")
     return "background"
 

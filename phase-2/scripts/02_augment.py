@@ -282,7 +282,7 @@ def augment_image(img: np.ndarray, labels: list, config: dict) -> Tuple[np.ndarr
 
 
 def augment_dataset(multiplier: int = 3, dry_run: bool = False):
-    """Augment entire dataset."""
+    """Augment entire dataset. Handles nested folder structure."""
     
     input_images = ANNOTATED_DIR / "images"
     input_labels = ANNOTATED_DIR / "labels"
@@ -297,9 +297,22 @@ def augment_dataset(multiplier: int = 3, dry_run: bool = False):
         output_images.mkdir(parents=True, exist_ok=True)
         output_labels.mkdir(parents=True, exist_ok=True)
     
-    # Get all images
-    image_files = list(input_images.glob("*"))
-    image_files = [f for f in image_files if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}]
+    # Get all images - handle both flat and nested structure
+    image_files = []
+    
+    # Check if there are subfolders (nested structure)
+    subfolders = [d for d in input_images.iterdir() if d.is_dir()]
+    
+    if subfolders:
+        # Nested structure: annotated/images/other_person/, annotated/images/tanmay/
+        for subfolder in subfolders:
+            for f in subfolder.iterdir():
+                if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}:
+                    image_files.append(f)
+    else:
+        # Flat structure: annotated/images/*.jpg
+        image_files = [f for f in input_images.glob("*") 
+                       if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}]
     
     print(f"📁 Input: {input_images}")
     print(f"📁 Output: {output_images}")
@@ -321,8 +334,15 @@ def augment_dataset(multiplier: int = 3, dry_run: bool = False):
             print(f"⚠️ Could not read: {img_path.name}")
             continue
         
-        # Read corresponding labels
-        label_path = input_labels / (img_path.stem + ".txt")
+        # Read corresponding labels - handle nested structure
+        # Image: annotated/images/other_person/img.jpg -> Label: annotated/labels/other_person/img.txt
+        if img_path.parent.name in [d.name for d in input_images.iterdir() if d.is_dir()]:
+            # Nested structure
+            subfolder = img_path.parent.name
+            label_path = input_labels / subfolder / (img_path.stem + ".txt")
+        else:
+            # Flat structure
+            label_path = input_labels / (img_path.stem + ".txt")
         labels = read_labels(label_path)
         
         # Copy original
