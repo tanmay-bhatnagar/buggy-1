@@ -342,11 +342,15 @@ def augment_dataset(multiplier: int = 3, dry_run: bool = False):
             label_path = input_labels / subfolder / (img_path.stem + ".txt")
         else:
             # Flat structure
+            subfolder = ""
             label_path = input_labels / (img_path.stem + ".txt")
         labels = read_labels(label_path)
         
-        # Copy original
-        base_name = img_path.stem
+        # Prefix with subfolder name to avoid collisions across classes
+        # e.g. background/1.jpg -> bg_1_orig.jpg, tanmay/1.jpg -> tanmay_1_orig.jpg
+        prefix_map = {"background": "bg", "other_person": "op", "tanmay": "tanmay"}
+        prefix = prefix_map.get(subfolder, subfolder) + "_" if subfolder else ""
+        base_name = f"{prefix}{img_path.stem}"
         ext = img_path.suffix
         
         cv2.imwrite(str(output_images / f"{base_name}_orig{ext}"), img)

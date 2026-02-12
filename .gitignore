@@ -18,9 +18,10 @@ __pycache__/
 
 # Training outputs (large files)
 phase-2/training/runs/
-phase-2/models/*.pt
-phase-2/models/*.onnx
-phase-2/models/*.engine
+*.pt
+*.onnx
+*.engine
+*.pth
 
 # IDE
 .vscode/
