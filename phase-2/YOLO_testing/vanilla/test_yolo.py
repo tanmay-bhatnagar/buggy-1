@@ -14,7 +14,7 @@ def main():
     parser.add_argument(
         "--weights", 
         type=str, 
-        default="training/runs/tanmay_detector_20260212_164033/weights/best.pt",
+        default="../../training/runs/tanmay_detector_20260212_164033/weights/best.pt",
         help="Path to best.pt weights"
     )
     args = parser.parse_args()
@@ -48,7 +48,7 @@ def main():
         # 4. Draw & Display
         for r in results:
             annotated_frame = r.plot()  # Draws boxes and labels
-            cv2.imshow("YOLO Live Detection", annotated_frame)
+            cv2.namedWindow("YOLO Live Detection", cv2.WINDOW_NORMAL); cv2.resizeWindow("YOLO Live Detection", 960, 720); cv2.imshow("YOLO Live Detection", annotated_frame)
 
         # 5. Exit logic
         key = cv2.waitKey(1) & 0xFF
