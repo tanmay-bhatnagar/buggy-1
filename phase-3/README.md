@@ -8,10 +8,10 @@ Bluetooth-connected Android app for long-range navigation, voice commands, and R
 
 | Component | Status |
 |-----------|--------|
-| **BLE/Classic BT Link** | ⏳ Pending |
+| **BLE/Classic BT Link** | ⏳ Pending (Simulated implemented) |
 | **Long-Range Navigation (3.1)** | ⏳ Pending |
-| **Voice Commands (3.2)** | ⏳ Pending |
-| **RC Mode + Livestream (3.3)** | ⏳ Pending |
+| **Voice Commands (3.2)** | 🟢 UI & STT Active (SLM Pending) |
+| **RC Mode + Livestream (3.3)** | 🟢 DPad UI Active (Livestream Pending) |
 
 ---
 
@@ -133,13 +133,14 @@ phase-3/
 
 ## TODO
 
+- [x] Decide: Android framework (Jetpack Compose - Completed)
 - [ ] Decide: Bluetooth Classic (SPP) vs BLE vs hybrid
 - [ ] Decide: camera streaming protocol (MJPEG vs WebRTC vs GStreamer)
-- [ ] Decide: Android framework (Jetpack Compose vs Flutter vs React Native)
 - [ ] Prototype BT pairing between phone and Jetson
-- [ ] Implement basic command send/receive
-- [ ] Build RC joystick UI
+- [ ] Implement basic command send/receive (Simulated BT manager created)
+- [x] Build RC joystick UI (DPad implemented)
 - [ ] Integrate camera livestream
 - [ ] Implement RSSI-based navigation logic
-- [ ] Add STT voice command pipeline
+- [x] Add STT voice command pipeline (Android Native SpeechRecognizer + Audio Debugging implemented)
+- [ ] Add On-Device SLM (Small Language Model) for Command Intent Parsing
 - [ ] End-to-end integration with Phase 1 + Phase 2
