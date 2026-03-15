@@ -46,6 +46,10 @@ def main():
     print("   Logic: Highlander Rule, Cross-Class NMS, Ghosting (15 frames)")
     print("   Press 'X' to exit.")
 
+    # FPS tracking
+    prev_time = time.time()
+    fps = 0.0
+
     while True:
         ret, frame = cap.read()
         if not ret: break
@@ -78,6 +82,13 @@ def main():
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
             cv2.putText(frame, label, (x1, y1-10), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+        # FPS calculation
+        curr_time = time.time()
+        fps = 0.9 * fps + 0.1 * (1.0 / max(curr_time - prev_time, 1e-6))
+        prev_time = curr_time
+        cv2.putText(frame, f"FPS: {fps:.1f}", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
 
         cv2.namedWindow("Buggy V1 - Scaffolded Detection", cv2.WINDOW_NORMAL); cv2.resizeWindow("Buggy V1 - Scaffolded Detection", 960, 720); cv2.imshow("Buggy V1 - Scaffolded Detection", frame)
 

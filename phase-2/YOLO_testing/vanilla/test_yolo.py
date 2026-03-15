@@ -6,6 +6,7 @@ Exit by pressing 'x' or 'q'.
 
 import cv2
 import argparse
+import time
 from pathlib import Path
 from ultralytics import YOLO
 
@@ -35,6 +36,10 @@ def main():
 
     print("📸 Camera started. Press 'X' to exit.")
 
+    # FPS tracking
+    prev_time = time.time()
+    fps = 0.0
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -48,6 +53,14 @@ def main():
         # 4. Draw & Display
         for r in results:
             annotated_frame = r.plot()  # Draws boxes and labels
+
+            # FPS calculation
+            curr_time = time.time()
+            fps = 0.9 * fps + 0.1 * (1.0 / max(curr_time - prev_time, 1e-6))
+            prev_time = curr_time
+            cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
+
             cv2.namedWindow("YOLO Live Detection", cv2.WINDOW_NORMAL); cv2.resizeWindow("YOLO Live Detection", 960, 720); cv2.imshow("YOLO Live Detection", annotated_frame)
 
         # 5. Exit logic

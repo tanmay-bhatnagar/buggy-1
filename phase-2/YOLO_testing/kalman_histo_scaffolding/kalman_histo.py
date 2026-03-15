@@ -53,6 +53,10 @@ def main():
     print("   Features: Kalman Prediction, Color Fingerprinting, Ghosting.")
     print("   Press 'X' to exit.")
 
+    # FPS tracking
+    prev_time = time.time()
+    fps = 0.0
+
     while True:
         ret, frame = cap.read()
         if not ret: break
@@ -96,6 +100,13 @@ def main():
                 cv2.circle(frame, (x1+10, y1+15), 5, (0, 255, 0), -1)
                 cv2.putText(frame, "Visual ID Locked", (x1+20, y1+20),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
+
+        # FPS calculation
+        curr_time = time.time()
+        fps = 0.9 * fps + 0.1 * (1.0 / max(curr_time - prev_time, 1e-6))
+        prev_time = curr_time
+        cv2.putText(frame, f"FPS: {fps:.1f}", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
 
         cv2.namedWindow("Follow-Me V2 - Kalman + Histogram", cv2.WINDOW_NORMAL); cv2.resizeWindow("Follow-Me V2 - Kalman + Histogram", 960, 720); cv2.imshow("Follow-Me V2 - Kalman + Histogram", frame)
 

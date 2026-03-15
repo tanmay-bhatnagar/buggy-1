@@ -1,65 +1,119 @@
 #!/bin/bash
-# Stop on any error
+# =================================================
+#   Jetson Orin Nano - Phase 2 Environment Setup
+#   Tested: March 16, 2026
+# =================================================
+# This script:
+#   1. Removes any existing Conda/Anaconda/Miniconda installations
+#   2. Installs Miniforge (ARM64-native Conda) from scratch
+#   3. Creates a Python 3.10 "buggy" environment
+#   4. Downloads NVIDIA's JetPack 6 PyTorch wheel directly
+#   5. Installs PyTorch, Ultralytics (YOLO), and all Phase 2 dependencies
+#
+# WHY MINIFORGE?
+#   Standard Anaconda/Miniconda channels don't reliably serve ARM64 (aarch64)
+#   packages. Miniforge is identical to Miniconda but defaults to conda-forge,
+#   which has full ARM64 support.
+#
+# WHY PYTHON 3.10?
+#   NVIDIA only compiles JetPack 6 PyTorch wheels for Python 3.10 (cp310).
+#   Any other Python version will fail with "no matching distribution."
+#
+# WHY DIRECT WGET INSTEAD OF --index-url?
+#   NVIDIA's download server is NOT a PEP 503 compliant pip index.
+#   Using --index-url with it silently fails. Downloading the .whl file
+#   directly and installing it locally is the only reliable method.
+# =================================================
+
 set -e
 
 echo "================================================="
 echo "   Jetson Orin Nano - Phase 2 Environment Setup  "
 echo "================================================="
 
+# ---------------------------
+# Step 1: Clean slate
+# ---------------------------
 echo ""
-echo "Step 1: Removing existing Conda/Anaconda installations to start fresh..."
-# Force remove the most common default installation paths
+echo "Step 1: Removing existing Conda/Anaconda installations..."
 rm -rf ~/miniconda3
 rm -rf ~/anaconda3
 rm -rf ~/miniforge3
 rm -rf ~/.conda
 
-# Clean up .bashrc to remove old conda initialization blocks
-# This prevents the old broken base environment from loading when you open a terminal
+# Remove old conda init blocks from .bashrc
 sed -i '/>>> conda initialize >>>/,/<<< conda initialize <<</d' ~/.bashrc
-echo "Old paths and environments cleared."
+echo "Done. Old conda paths and environments cleared."
 
+# ---------------------------
+# Step 2: Install Miniforge
+# ---------------------------
 echo ""
-echo "Step 2: Downloading and Installing Miniforge (ARM64)..."
+echo "Step 2: Downloading and installing Miniforge (ARM64)..."
 cd /tmp
 wget -O Miniforge3.sh "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh"
-# -b runs it in batch mode (no manual "yes" needed), -p sets the path
 bash Miniforge3.sh -b -p ~/miniforge3
+echo "Done. Miniforge installed to ~/miniforge3."
 
+# ---------------------------
+# Step 3: Initialize Miniforge
+# ---------------------------
 echo ""
-echo "Step 3: Initializing Miniforge..."
-# Initialize it so it adds the new correct block to your .bashrc
+echo "Step 3: Initializing Miniforge for bash..."
 ~/miniforge3/bin/conda init bash
-# Source it directly for this script so we can use the 'conda' command immediately
 source ~/miniforge3/etc/profile.d/conda.sh
+echo "Done."
 
+# ---------------------------
+# Step 4: Create Python 3.10 environment
+# ---------------------------
 echo ""
 echo "Step 4: Creating Python 3.10 environment ('buggy')..."
-# Python 3.10 is MANDATORY for NVIDIA's PyTorch wheels
 conda create -n buggy python=3.10 -y
 conda activate buggy
+echo "Done. Active environment: $(python3 --version)"
 
+# ---------------------------
+# Step 5: Install NVIDIA PyTorch (direct download)
+# ---------------------------
 echo ""
-echo "Step 5: Installing NVIDIA-optimized PyTorch for JetPack 6..."
-pip install torch --index-url https://developer.download.nvidia.com/compute/redist/jp/v60
+echo "Step 5: Downloading NVIDIA-optimized PyTorch for JetPack 6..."
+TORCH_WHL="torch-2.4.0a0+3bcc3cddb5.nv24.07.16234504-cp310-cp310-linux_aarch64.whl"
+TORCH_URL="https://developer.download.nvidia.com/compute/redist/jp/v60/pytorch/${TORCH_WHL}"
 
+cd /tmp
+if [ ! -f "$TORCH_WHL" ]; then
+    wget "$TORCH_URL"
+else
+    echo "PyTorch wheel already downloaded, skipping."
+fi
+
+echo "Installing PyTorch from local wheel..."
+pip install "/tmp/${TORCH_WHL}"
+echo "Done. PyTorch installed."
+
+# ---------------------------
+# Step 6: Install remaining dependencies
+# ---------------------------
 echo ""
-echo "Step 6: Installing Ultralytics (YOLO) and Phase 2 Dependencies..."
-# Ultralytics will install standard opencv-python, numpy, pillow, tqdm, etc.
+echo "Step 6: Installing Ultralytics (YOLO) and Phase 2 dependencies..."
+pip install torchvision
 pip install ultralytics
-# Adding explicit dependencies from your requirements.txt just in case! 
 pip install albumentations PyYAML tqdm
+echo "Done."
 
+# ---------------------------
+# Complete
+# ---------------------------
 echo ""
 echo "================================================="
-echo "                 Setup Complete!                 "
+echo "              ✅ Setup Complete!                  "
 echo "================================================="
-echo "1. Because we modified your .bashrc, you MUST close this terminal."
-echo "2. Open a BRAND NEW terminal."
-echo "3. You should see (base) next to your name. Your clean slate is ready!"
 echo ""
-echo "To run your test, execute:"
-echo "conda activate buggy"
-echo "cd ~/Desktop/buggy-1/phase-2/YOLO_testing/kalman_histo_scaffolding/"
-echo "python3 kalman_histo.py --weights ../../best.pt"
+echo "IMPORTANT: Close this terminal and open a new one."
+echo ""
+echo "To run your YOLO test:"
+echo "  conda activate buggy"
+echo "  cd ~/Desktop/buggy-1/phase-2/YOLO_testing/kalman_histo_scaffolding/"
+echo "  python3 kalman_histo.py --weights ../../best.pt"
 echo "================================================="
