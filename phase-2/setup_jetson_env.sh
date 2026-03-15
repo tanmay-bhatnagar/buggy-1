@@ -41,7 +41,7 @@ conda activate buggy
 
 echo ""
 echo "Step 5: Installing NVIDIA-optimized PyTorch for JetPack 6..."
-pip install torch torchvision torchaudio --index-url https://developer.download.nvidia.com/compute/redist/jp/v60
+pip install torch --index-url https://developer.download.nvidia.com/compute/redist/jp/v60
 
 echo ""
 echo "Step 6: Installing Ultralytics (YOLO) and Phase 2 Dependencies..."
