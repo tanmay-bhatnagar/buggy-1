@@ -23,6 +23,10 @@ phase-2/training/runs/
 *.engine
 *.pth
 
+# Jetson remote dev (created by utils/jetson.sh)
+jetson_pull/
+utils/.jetson_config
+
 # IDE
 .vscode/
 .idea/
