@@ -1,0 +1,13 @@
+{
+  "module_name": "jetson-yolo-detector",
+  "visibility": "public",
+  "namespace": "tanmay-bhatnagar",
+  "language": "python",
+  "resource_type": "service",
+  "resource_subtype": "vision",
+  "model_name": "yolo-tensorrt",
+  "initialize_git": false,
+  "generator_version": "0.1.0",
+  "generated_on": "2026-04-10T08:19:19.704588303Z",
+  "module_readme_link": "README.md"
+}

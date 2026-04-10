@@ -1,0 +1,26 @@
+{
+  "$schema": "https://dl.viam.dev/module.schema.json",
+  "module_id": "tanmay-bhatnagar:jetson-yolo-detector",
+  "visibility": "public",
+  "url": "https://github.com/tbhatnagar/jetson-yolo-detector",
+  "description": "High-performance YOLO object detection on NVIDIA Jetson using TensorRT. Compiled for JetPack 6.2 with CUDA acceleration. Plug-and-play vision service — just point it at your .engine file.",
+  "models": [
+    {
+      "api": "rdk:service:vision",
+      "model": "tanmay-bhatnagar:jetson-yolo-detector:yolo-tensorrt",
+      "markdown_link": "tanmay-bhatnagar_jetson-yolo-detector_yolo-tensorrt.md"
+    }
+  ],
+  "applications": null,
+  "markdown_link": "README.md",
+  "entrypoint": "src/main.py",
+  "first_run": "setup.sh",
+  "build": {
+    "build": "./build.sh",
+    "setup": "./setup.sh",
+    "path": "dist/archive.tar.gz",
+    "arch": [
+      "linux/arm64"
+    ]
+  }
+}

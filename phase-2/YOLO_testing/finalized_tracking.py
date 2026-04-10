@@ -297,7 +297,7 @@ class FinalizedTracker:
         if not self.target_active:
             return None
         prediction = self.kf.predict()
-        return np.array([float(prediction[0]), float(prediction[1])], dtype=np.float32)
+        return np.array([float(prediction[0, 0]), float(prediction[1, 0])], dtype=np.float32)
 
     def _shift_box_to_center(self, box: np.ndarray, center: np.ndarray) -> np.ndarray:
         width = box[2] - box[0]
@@ -464,7 +464,7 @@ def draw_tracking_overlay(
             0.5,
             (255, 255, 255),
             1,
-            cv2.LINE_AA,
+            cv2.LINE_8,
         )
 
     hud_lines = [
@@ -482,7 +482,7 @@ def draw_tracking_overlay(
             0.7,
             (0, 255, 0),
             2,
-            cv2.LINE_AA,
+            cv2.LINE_8,
         )
 
 
@@ -504,7 +504,11 @@ def main() -> None:
     parser.add_argument("--conf-start", type=float, default=0.60, help="Confidence threshold to acquire lock")
     parser.add_argument("--conf-keep", type=float, default=0.35, help="Confidence threshold to keep lock")
     parser.add_argument("--ghost-limit", type=int, default=15, help="Frames to keep ghost state alive")
-    parser.add_argument("--max-det", type=int, default=8, help="Max detections to consider from YOLO")
+    parser.add_argument("--max-det", type=int, default=0, help="Optional max detections override for YOLO")
+    parser.add_argument("--camera-width", type=int, default=0, help="Optional camera width override")
+    parser.add_argument("--camera-height", type=int, default=0, help="Optional camera height override")
+    parser.add_argument("--headless", action="store_true", help="Disable OpenCV window rendering for true loop-FPS testing")
+    parser.add_argument("--profile", action="store_true", help="Print timing breakdown every 30 frames")
     args = parser.parse_args()
 
     weights_path = Path(args.weights)
@@ -528,55 +532,96 @@ def main() -> None:
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open source: {args.source}")
 
+    if args.camera_width > 0:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.camera_width)
+    if args.camera_height > 0:
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.camera_height)
+
     window_name = "Phase 2 - Finalized Tracking"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(window_name, 1280, 720)
+    if not args.headless:
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(window_name, 1280, 720)
 
     prev_time = time.time()
     fps = 0.0
-    infer_conf = min(args.conf_start, args.conf_keep)
+    frame_count = 0
+    capture_ms = 0.0
+    infer_ms = 0.0
+    track_ms = 0.0
+    render_ms = 0.0
 
     print(
         "Running finalized tracker | "
         f"identity={identity_scorer.label} | "
         f"track_tanmay_only={tracker.track_tanmay_only}"
     )
-    print("Press X to exit.")
+    if args.headless:
+        print("Headless mode enabled.")
+    else:
+        print("Press X to exit.")
 
     while True:
+        loop_t0 = time.perf_counter()
         ok, frame = cap.read()
         if not ok:
             break
+        t_after_capture = time.perf_counter()
 
-        infer_kwargs = {
-            "verbose": False,
-            "conf": infer_conf,
-            "max_det": args.max_det,
-        }
-        if tracker.track_tanmay_only:
-            infer_kwargs["classes"] = [args.target_class_id]
-
+        infer_kwargs = {"verbose": False}
+        if args.max_det > 0:
+            infer_kwargs["max_det"] = args.max_det
         result = model(frame, **infer_kwargs)[0]
-        boxes = result.boxes.xyxy.detach().cpu().numpy() if result.boxes is not None else np.empty((0, 4), dtype=np.float32)
-        confs = result.boxes.conf.detach().cpu().numpy() if result.boxes is not None else np.empty((0,), dtype=np.float32)
-        classes = result.boxes.cls.detach().cpu().numpy() if result.boxes is not None else np.empty((0,), dtype=np.float32)
+        t_after_infer = time.perf_counter()
+
+        boxes_data = result.boxes
+        if boxes_data is not None and len(boxes_data) > 0:
+            boxes = boxes_data.xyxy.detach().cpu().numpy()
+            confs = boxes_data.conf.detach().cpu().numpy()
+            classes = boxes_data.cls.detach().cpu().numpy()
+        else:
+            boxes = np.empty((0, 4), dtype=np.float32)
+            confs = np.empty((0,), dtype=np.float32)
+            classes = np.empty((0,), dtype=np.float32)
 
         tracked_box, is_ghost, debug = tracker.process(frame, boxes, confs, classes)
+        t_after_track = time.perf_counter()
 
         curr_time = time.time()
         instant_fps = 1.0 / max(curr_time - prev_time, 1e-6)
         fps = instant_fps if fps == 0.0 else ((0.9 * fps) + (0.1 * instant_fps))
         prev_time = curr_time
 
-        draw_tracking_overlay(frame, tracked_box, is_ghost, fps, tracker, debug)
-        cv2.imshow(window_name, frame)
+        if not args.headless:
+            draw_tracking_overlay(frame, tracked_box, is_ghost, fps, tracker, debug)
+            cv2.imshow(window_name, frame)
+            key = cv2.waitKey(1) & 0xFF
+            if key in (ord("x"), ord("X")):
+                break
+        t_after_render = time.perf_counter()
 
-        key = cv2.waitKey(1) & 0xFF
-        if key in (ord("x"), ord("X")):
-            break
+        frame_count += 1
+        capture_ms += (t_after_capture - loop_t0) * 1000.0
+        infer_ms += (t_after_infer - t_after_capture) * 1000.0
+        track_ms += (t_after_track - t_after_infer) * 1000.0
+        render_ms += (t_after_render - t_after_track) * 1000.0
+
+        if args.profile and frame_count % 30 == 0:
+            denom = 30.0
+            print(
+                f"[profile] fps={fps:.1f} "
+                f"capture={capture_ms / denom:.1f}ms "
+                f"infer={infer_ms / denom:.1f}ms "
+                f"track={track_ms / denom:.1f}ms "
+                f"render={render_ms / denom:.1f}ms"
+            )
+            capture_ms = 0.0
+            infer_ms = 0.0
+            track_ms = 0.0
+            render_ms = 0.0
 
     cap.release()
-    cv2.destroyAllWindows()
+    if not args.headless:
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
