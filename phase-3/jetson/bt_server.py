@@ -47,7 +47,7 @@ except ImportError:
 
 RFCOMM_CHANNEL = 1          # RFCOMM channel (1 is standard for SPP)
 DEFAULT_SERIAL_PORT = "/dev/ttyACM0"
-BAUD_RATE = 9600
+BAUD_RATE = 115200
 
 # Linux Bluetooth constants
 _AF_BLUETOOTH = 31
