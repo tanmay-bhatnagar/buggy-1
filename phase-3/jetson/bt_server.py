@@ -2,9 +2,8 @@
 """
 bt_server.py — Bluetooth SPP listener for the buggy.
 
-Uses native Python AF_BLUETOOTH sockets (no pybluez dependency).
-Accepts one Android client at a time over RFCOMM (Serial Port Profile).
-Receives JSON commands and routes them to the Arduino via serial.
+Uses ctypes to call Linux Bluetooth socket APIs directly.
+Works with conda Python (which lacks AF_BLUETOOTH support in its socket module).
 
 Setup (run once on Jetson):
     sudo sdptool add SP                    # register SPP service in SDP
@@ -27,9 +26,14 @@ Protocol (Jetson → Phone):
 """
 
 import argparse
+import ctypes
+import ctypes.util
 import json
+import os
+import select
 import signal
 import socket
+import struct
 import sys
 import time
 
@@ -44,6 +48,13 @@ except ImportError:
 RFCOMM_CHANNEL = 1          # RFCOMM channel (1 is standard for SPP)
 DEFAULT_SERIAL_PORT = "/dev/ttyACM0"
 BAUD_RATE = 9600
+
+# Linux Bluetooth constants
+_AF_BLUETOOTH = 31
+_BTPROTO_RFCOMM = 3
+
+# libc for raw syscalls (conda Python lacks BT address support)
+_libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
 
 # Direction → Arduino serial character (Phase 1 protocol)
 DIR_MAP = {
@@ -70,6 +81,49 @@ def signal_handler(sig, frame):
 
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
+
+
+# ── Bluetooth Socket Helpers (ctypes) ──────────────────────────────────────
+
+def bt_create_server(channel: int):
+    """Create, bind, and listen on a BT RFCOMM socket using ctypes for bind."""
+    sock = socket.socket(_AF_BLUETOOTH, socket.SOCK_STREAM, _BTPROTO_RFCOMM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    # struct sockaddr_rc { uint16_t family; uint8_t bdaddr[6]; uint8_t channel; }
+    # BDADDR_ANY = 00:00:00:00:00:00
+    addr = struct.pack("<H6sB", _AF_BLUETOOTH, b"\x00" * 6, channel)
+    rc = _libc.bind(sock.fileno(), addr, len(addr))
+    if rc != 0:
+        errno = ctypes.get_errno()
+        raise OSError(errno, f"bind() failed: {os.strerror(errno)}")
+
+    sock.listen(1)
+    return sock
+
+
+def bt_accept(server_sock):
+    """Accept a BT RFCOMM connection using ctypes. Returns (client_socket, (addr_str, channel))."""
+    addr_buf = ctypes.create_string_buffer(10)  # sockaddr_rc is 9 bytes
+    addr_len = ctypes.c_int(10)
+
+    fd = _libc.accept(server_sock.fileno(), addr_buf, ctypes.byref(addr_len))
+    if fd < 0:
+        errno = ctypes.get_errno()
+        raise OSError(errno, os.strerror(errno))
+
+    # Parse peer address
+    raw = addr_buf.raw[:addr_len.value]
+    if len(raw) >= 9:
+        _, bdaddr_bytes, ch = struct.unpack("<H6sB", raw[:9])
+        bdaddr = ":".join(f"{b:02X}" for b in reversed(bdaddr_bytes))
+    else:
+        bdaddr, ch = "unknown", 0
+
+    # Wrap raw fd in a Python socket for easy recv/send
+    client_sock = socket.fromfd(fd, _AF_BLUETOOTH, socket.SOCK_STREAM, _BTPROTO_RFCOMM)
+    os.close(fd)  # fromfd() dups the fd, close the original
+    return client_sock, (bdaddr, ch)
 
 
 # ── Serial (Arduino) ───────────────────────────────────────────────────────
@@ -148,22 +202,13 @@ def handle_command(data: dict, arduino: ArduinoSerial) -> dict:
 
 def run_server(arduino: ArduinoSerial, channel: int = RFCOMM_CHANNEL):
     """
-    Listen for RFCOMM connections using native Python Bluetooth sockets.
+    Listen for RFCOMM connections using ctypes-based BT sockets.
     Accepts one client at a time, reconnects when client drops.
     """
-    # AF_BLUETOOTH=31, BTPROTO_RFCOMM=3 on Linux
-    # Conda Python may not expose these as attributes, but the kernel accepts raw ints
-    AF_BLUETOOTH = getattr(socket, "AF_BLUETOOTH", 31)
-    BTPROTO_RFCOMM = getattr(socket, "BTPROTO_RFCOMM", 3)
-
-    server_sock = socket.socket(AF_BLUETOOTH, socket.SOCK_STREAM, BTPROTO_RFCOMM)
-    server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_sock.bind(("00:00:00:00:00:00", channel))
-    server_sock.listen(1)
-    server_sock.settimeout(2.0)
+    server_sock = bt_create_server(channel)
 
     print(f"\n{'═' * 50}")
-    print(f"   🚗 Buggy BT Server (native RFCOMM)")
+    print(f"   🚗 Buggy BT Server (RFCOMM via ctypes)")
     print(f"   Channel: {channel}")
     print(f"   Waiting for Android client...")
     print(f"   (Make sure you ran: sudo sdptool add SP)")
@@ -173,11 +218,13 @@ def run_server(arduino: ArduinoSerial, channel: int = RFCOMM_CHANNEL):
     while running:
         client_sock = None
         try:
-            # Accept blocks until a client connects (with 2s timeout)
+            # Use select for timeout (avoids Python's family-aware settimeout)
+            readable, _, _ = select.select([server_sock], [], [], 2.0)
+            if not readable:
+                continue  # timeout — loop and check `running`
+
             try:
-                client_sock, client_info = server_sock.accept()
-            except socket.timeout:
-                continue  # loop back and check `running`
+                client_sock, client_info = bt_accept(server_sock)
             except OSError as e:
                 if not running:
                     break
@@ -186,11 +233,15 @@ def run_server(arduino: ArduinoSerial, channel: int = RFCOMM_CHANNEL):
                 continue
 
             print(f"   📱 Client connected: {client_info}")
-            client_sock.settimeout(2.0)
             buffer = ""
 
             while running:
                 try:
+                    # Use select for recv timeout too
+                    readable, _, _ = select.select([client_sock], [], [], 2.0)
+                    if not readable:
+                        continue  # no data yet
+
                     data = client_sock.recv(1024)
                     if not data:
                         print(f"   📱 Client disconnected (empty read)")
@@ -215,14 +266,13 @@ def run_server(arduino: ArduinoSerial, channel: int = RFCOMM_CHANNEL):
                         except json.JSONDecodeError:
                             print(f"   ⚠️  Bad JSON: {line}")
 
-                except socket.timeout:
-                    continue  # no data — loop back
                 except (OSError, ConnectionResetError) as e:
                     print(f"   📱 Client connection lost: {e}")
                     break
 
         except Exception as e:
-            print(f"   ❌ Server error: {e}")
+            if running:
+                print(f"   ❌ Server error: {e}")
 
         finally:
             if client_sock:
