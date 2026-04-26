@@ -118,7 +118,12 @@ class BluetoothSppManager(
         }
 
         // Stop discovery — it slows down RFCOMM connections
-        if (adapter.isDiscovering) adapter.cancelDiscovery()
+        // This requires BLUETOOTH_SCAN permission; skip gracefully if not granted
+        try {
+            if (adapter.isDiscovering) adapter.cancelDiscovery()
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Cannot check/cancel discovery (BLUETOOTH_SCAN not granted): ${e.message}")
+        }
 
         repeat(MAX_RETRIES) { attempt ->
             if (!isActive) return@withContext   // coroutine was cancelled
