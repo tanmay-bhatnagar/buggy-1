@@ -226,9 +226,9 @@ def run_server(arduino: ArduinoSerial, channel: int = RFCOMM_CHANNEL):
                     client_sock.close()
                 except Exception:
                     pass
-            # Stop motors when client disconnects
-            arduino.send("S")
-            print(f"   ⏸  Motors stopped. Waiting for next client...\n")
+                # Stop motors when client disconnects
+                arduino.send("S")
+                print(f"   ⏸  Motors stopped. Waiting for next client...\n")
 
     # Cleanup
     server_sock.close()
