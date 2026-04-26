@@ -152,7 +152,7 @@ class ArduinoSerial:
             print(f"   [DRY-RUN] → Arduino: '{char}'")
             return
         try:
-            self.ser.write(char.encode())
+            self.ser.write((char + "\n").encode())
             self.ser.flush()
             print(f"   → Arduino: '{char}'")
         except Exception as e:

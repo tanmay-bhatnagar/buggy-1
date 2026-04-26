@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.io.OutputStream
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Real Bluetooth Classic (SPP) manager.
@@ -56,12 +57,15 @@ class BluetoothSppManager(
 
     private val _isConnected = MutableStateFlow(false)
     override val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+    private val _connectionState = MutableStateFlow(BluetoothConnectionState())
+    override val connectionState: StateFlow<BluetoothConnectionState> = _connectionState.asStateFlow()
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var socket: BluetoothSocket? = null
     private var outputStream: OutputStream? = null
     private var connectJob: Job? = null
+    private val isConnecting = AtomicBoolean(false)
 
     // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -70,7 +74,10 @@ class BluetoothSppManager(
             Log.d(TAG, "Already connected, ignoring connect() call")
             return
         }
-        connectJob?.cancel()
+        if (!isConnecting.compareAndSet(false, true)) {
+            Log.d(TAG, "Connection already in progress, ignoring connect() call")
+            return
+        }
         connectJob = scope.launch { connectWithRetry() }
     }
 
@@ -78,7 +85,9 @@ class BluetoothSppManager(
         Log.d(TAG, "Disconnecting…")
         connectJob?.cancel()
         closeSocket()
+        isConnecting.set(false)
         _isConnected.value = false
+        _connectionState.value = BluetoothConnectionState()
     }
 
     override fun sendCommand(command: String) {
@@ -95,8 +104,14 @@ class BluetoothSppManager(
             } catch (e: IOException) {
                 Log.e(TAG, "Write failed: ${e.message}")
                 _isConnected.value = false
+                _connectionState.value = BluetoothConnectionState(
+                    BluetoothConnectionStatus.FAILED,
+                    "Write failed: ${e.message ?: "socket error"}"
+                )
                 // Attempt reconnect after a write failure
-                connectWithRetry()
+                if (isConnecting.compareAndSet(false, true)) {
+                    connectWithRetry()
+                }
             }
         }
     }
@@ -104,9 +119,19 @@ class BluetoothSppManager(
     // ── Internal helpers ───────────────────────────────────────────────────────
 
     private suspend fun connectWithRetry() = withContext(Dispatchers.IO) {
+        _connectionState.value = BluetoothConnectionState(
+            BluetoothConnectionStatus.CONNECTING,
+            "Connecting to $targetMacAddress..."
+        )
+
         val adapter = BluetoothAdapter.getDefaultAdapter()
         if (adapter == null || !adapter.isEnabled) {
             Log.e(TAG, "Bluetooth adapter not available or disabled")
+            _connectionState.value = BluetoothConnectionState(
+                BluetoothConnectionStatus.FAILED,
+                "Bluetooth is unavailable or disabled"
+            )
+            isConnecting.set(false)
             return@withContext
         }
 
@@ -114,6 +139,11 @@ class BluetoothSppManager(
             adapter.getRemoteDevice(targetMacAddress)
         } catch (e: IllegalArgumentException) {
             Log.e(TAG, "Invalid MAC address: $targetMacAddress")
+            _connectionState.value = BluetoothConnectionState(
+                BluetoothConnectionStatus.FAILED,
+                "Invalid Bluetooth address: $targetMacAddress"
+            )
+            isConnecting.set(false)
             return@withContext
         }
 
@@ -125,31 +155,81 @@ class BluetoothSppManager(
             Log.w(TAG, "Cannot check/cancel discovery (BLUETOOTH_SCAN not granted): ${e.message}")
         }
 
-        repeat(MAX_RETRIES) { attempt ->
-            if (!isActive) return@withContext   // coroutine was cancelled
+        try {
+            repeat(MAX_RETRIES) { attempt ->
+                if (!isActive) return@withContext   // coroutine was cancelled
 
-            Log.d(TAG, "Connection attempt ${attempt + 1}/$MAX_RETRIES to $targetMacAddress")
+                val attemptNumber = attempt + 1
+                _connectionState.value = BluetoothConnectionState(
+                    BluetoothConnectionStatus.CONNECTING,
+                    "Connecting... attempt $attemptNumber/$MAX_RETRIES"
+                )
+                Log.d(TAG, "Connection attempt $attemptNumber/$MAX_RETRIES to $targetMacAddress")
 
-            try {
-                val newSocket = device.createRfcommSocketToServiceRecord(SPP_UUID)
-                newSocket.connect()             // blocking — runs on IO dispatcher
-                socket = newSocket
-                outputStream = newSocket.outputStream
-                _isConnected.value = true
-                Log.d(TAG, "Connected to $targetMacAddress")
-                return@withContext              // success — exit retry loop
-            } catch (e: IOException) {
-                Log.w(TAG, "Attempt ${attempt + 1} failed: ${e.message}")
-                closeSocket()
+                val lastError = connectOnce(device)
+                if (_isConnected.value) {
+                    _connectionState.value = BluetoothConnectionState(
+                        BluetoothConnectionStatus.CONNECTED,
+                        "Connected to Jetson"
+                    )
+                    Log.d(TAG, "Connected to $targetMacAddress")
+                    return@withContext
+                }
+
+                Log.w(TAG, "Attempt $attemptNumber failed: ${lastError ?: "unknown error"}")
                 if (attempt < MAX_RETRIES - 1) {
                     delay(RETRY_DELAY_MS)
                 }
             }
-        }
 
-        if (!_isConnected.value) {
-            Log.e(TAG, "All $MAX_RETRIES connection attempts failed")
+            if (!_isConnected.value) {
+                Log.e(TAG, "All $MAX_RETRIES connection attempts failed")
+                _connectionState.value = BluetoothConnectionState(
+                    BluetoothConnectionStatus.FAILED,
+                    "Connection failed after $MAX_RETRIES attempts"
+                )
+            }
+        } finally {
+            isConnecting.set(false)
         }
+    }
+
+    private fun connectOnce(device: BluetoothDevice): String? {
+        val attempts = listOf(
+            "secure SPP" to { device.createRfcommSocketToServiceRecord(SPP_UUID) },
+            "insecure SPP" to { device.createInsecureRfcommSocketToServiceRecord(SPP_UUID) },
+            "RFCOMM channel 1" to { createRfcommSocketOnChannel(device, 1) }
+        )
+
+        var lastError: String? = null
+        for ((label, socketFactory) in attempts) {
+            var candidate: BluetoothSocket? = null
+            try {
+                Log.d(TAG, "Trying $label")
+                candidate = socketFactory()
+                candidate.connect()
+                socket = candidate
+                outputStream = candidate.outputStream
+                _isConnected.value = true
+                Log.d(TAG, "$label connected")
+                return null
+            } catch (e: Exception) {
+                lastError = "$label: ${e.message ?: e.javaClass.simpleName}"
+                Log.w(TAG, "$label failed: ${e.message}")
+                try {
+                    candidate?.close()
+                } catch (closeError: IOException) {
+                    Log.w(TAG, "Error closing failed $label socket: ${closeError.message}")
+                }
+                closeSocket()
+            }
+        }
+        return lastError
+    }
+
+    private fun createRfcommSocketOnChannel(device: BluetoothDevice, channel: Int): BluetoothSocket {
+        val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+        return method.invoke(device, channel) as BluetoothSocket
     }
 
     private fun closeSocket() {

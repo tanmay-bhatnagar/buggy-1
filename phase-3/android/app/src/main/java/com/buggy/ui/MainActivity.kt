@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.buggy.ui.bluetooth.BluetoothSppManager
+import com.buggy.ui.bluetooth.BluetoothConnectionStatus
 import com.buggy.ui.bluetooth.IBluetoothManager
 import com.buggy.ui.audio.AudioSessionManager
 import com.buggy.ui.components.DPad
@@ -67,9 +68,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen(modifier: Modifier = Modifier, bluetoothManager: IBluetoothManager, speechRecognizer: BuggySpeechRecognizer, audioSessionManager: AudioSessionManager) {
     val isConnected by bluetoothManager.isConnected.collectAsState()
+    val connectionState by bluetoothManager.connectionState.collectAsState()
     val isListening by speechRecognizer.isListening.collectAsState()
     val spokenText by speechRecognizer.spokenText.collectAsState()
     val clips by audioSessionManager.clips.collectAsState()
+    val isConnecting = connectionState.status == BluetoothConnectionStatus.CONNECTING
     
     LaunchedEffect(isListening) {
         if (isListening) {
@@ -87,16 +90,14 @@ fun MainScreen(modifier: Modifier = Modifier, bluetoothManager: IBluetoothManage
         )
     }
 
-    // Android 12+ requires BLUETOOTH_CONNECT at runtime
-    var hasBluetoothPermission by remember {
-        mutableStateOf(
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-            } else {
-                true   // Not needed below API 31
-            }
-        )
-    }
+    fun hasBluetoothRuntimePermissions(): Boolean =
+        android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S ||
+            (
+                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+                )
+
+    var hasBluetoothPermission by remember { mutableStateOf(hasBluetoothRuntimePermissions()) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -104,8 +105,13 @@ fun MainScreen(modifier: Modifier = Modifier, bluetoothManager: IBluetoothManage
     )
 
     val btPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted -> hasBluetoothPermission = isGranted }
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+        onResult = {
+            hasBluetoothPermission = hasBluetoothRuntimePermissions()
+            if (hasBluetoothPermission) {
+                bluetoothManager.connect()
+            }
+        }
     )
 
     Column(
@@ -123,24 +129,40 @@ fun MainScreen(modifier: Modifier = Modifier, bluetoothManager: IBluetoothManage
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (isConnected) "Status: Connected" else "Status: Disconnected",
-                color = if (isConnected) Color(0xFF4CAF50) else Color(0xFFF44336),
+                text = "Status: ${connectionState.message}",
+                color = when (connectionState.status) {
+                    BluetoothConnectionStatus.CONNECTED -> Color(0xFF4CAF50)
+                    BluetoothConnectionStatus.CONNECTING -> Color(0xFFFFC107)
+                    BluetoothConnectionStatus.FAILED -> Color(0xFFFF7043)
+                    BluetoothConnectionStatus.DISCONNECTED -> Color(0xFFF44336)
+                },
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp
             )
 
             Button(onClick = {
-                if (isConnected) {
+                if (isConnected || isConnecting) {
                     bluetoothManager.disconnect()
                 } else {
                     if (!hasBluetoothPermission && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                        btPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                        btPermissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.BLUETOOTH_CONNECT,
+                                Manifest.permission.BLUETOOTH_SCAN
+                            )
+                        )
                     } else {
                         bluetoothManager.connect()
                     }
                 }
             }) {
-                Text(if (isConnected) "Disconnect" else "Connect")
+                Text(
+                    when {
+                        isConnected -> "Disconnect"
+                        isConnecting -> "Cancel"
+                        else -> "Connect"
+                    }
+                )
             }
         }
 

@@ -13,12 +13,16 @@ class SimulatedBluetoothManager : IBluetoothManager {
     private val scope = CoroutineScope(Dispatchers.IO)
     private val _isConnected = MutableStateFlow(false)
     override val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+    private val _connectionState = MutableStateFlow(BluetoothConnectionState())
+    override val connectionState: StateFlow<BluetoothConnectionState> = _connectionState.asStateFlow()
 
     override fun connect() {
         Log.d("SimulatedBT", "Attempting to connect...")
+        _connectionState.value = BluetoothConnectionState(BluetoothConnectionStatus.CONNECTING, "Connecting...")
         scope.launch {
             delay(1000)
             _isConnected.value = true
+            _connectionState.value = BluetoothConnectionState(BluetoothConnectionStatus.CONNECTED, "Connected")
             Log.d("SimulatedBT", "Connected successfully!")
         }
     }
@@ -26,6 +30,7 @@ class SimulatedBluetoothManager : IBluetoothManager {
     override fun disconnect() {
         Log.d("SimulatedBT", "Disconnecting...")
         _isConnected.value = false
+        _connectionState.value = BluetoothConnectionState()
     }
 
     override fun sendCommand(command: String) {
