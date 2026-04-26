@@ -151,8 +151,12 @@ def run_server(arduino: ArduinoSerial, channel: int = RFCOMM_CHANNEL):
     Listen for RFCOMM connections using native Python Bluetooth sockets.
     Accepts one client at a time, reconnects when client drops.
     """
-    # AF_BLUETOOTH = 31 on Linux, BTPROTO_RFCOMM = 3
-    server_sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+    # AF_BLUETOOTH=31, BTPROTO_RFCOMM=3 on Linux
+    # Conda Python may not expose these as attributes, but the kernel accepts raw ints
+    AF_BLUETOOTH = getattr(socket, "AF_BLUETOOTH", 31)
+    BTPROTO_RFCOMM = getattr(socket, "BTPROTO_RFCOMM", 3)
+
+    server_sock = socket.socket(AF_BLUETOOTH, socket.SOCK_STREAM, BTPROTO_RFCOMM)
     server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_sock.bind(("00:00:00:00:00:00", channel))
     server_sock.listen(1)
