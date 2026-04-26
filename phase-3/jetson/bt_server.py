@@ -154,7 +154,7 @@ def run_server(arduino: ArduinoSerial, channel: int = RFCOMM_CHANNEL):
     # AF_BLUETOOTH = 31 on Linux, BTPROTO_RFCOMM = 3
     server_sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
     server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_sock.bind(("", channel))
+    server_sock.bind(("00:00:00:00:00:00", channel))
     server_sock.listen(1)
     server_sock.settimeout(2.0)
 
