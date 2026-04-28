@@ -136,8 +136,25 @@ class ArduinoSerial:
         self.ser = None
         if not dry_run and serial is not None:
             try:
-                self.ser = serial.Serial(port, baud, timeout=1)
-                time.sleep(2)  # Arduino resets on serial open
+                self.ser = serial.Serial(
+                    port,
+                    baud,
+                    timeout=0.2,
+                    write_timeout=2,
+                    xonxoff=False,
+                    rtscts=False,
+                    dsrdtr=False,
+                )
+                # Keep the UNO R4 in the same serial state as the manual test
+                # that reliably moved the buggy from the Jetson shell.
+                self.ser.dtr = False
+                time.sleep(0.2)
+                self.ser.reset_input_buffer()
+                self.ser.reset_output_buffer()
+                print(f"   ⏳ Waiting for Arduino runtime on {port}...")
+                time.sleep(3)
+                self._drain_boot_lines()
+                self._prime_runtime()
                 print(f"   ✅ Arduino connected on {port} @ {baud}")
             except Exception as e:
                 print(f"   ⚠️  Arduino serial failed: {e}")
@@ -145,6 +162,24 @@ class ArduinoSerial:
                 self.dry_run = True
         else:
             print(f"   🔇 Dry-run mode — no serial output")
+
+    def _drain_boot_lines(self):
+        """Print any pending Arduino boot/status lines after serial open."""
+        if not self.ser:
+            return
+        try:
+            while self.ser.in_waiting:
+                line = self.ser.readline().decode("utf-8", "ignore").rstrip()
+                if line:
+                    print(f"   ← Arduino boot: {line}")
+        except Exception as e:
+            print(f"   ⚠️  Arduino boot drain failed: {e}")
+
+    def _prime_runtime(self):
+        """Wake the Phase-1 runtime without changing movement state."""
+        for _ in range(2):
+            self.send("HB")
+            time.sleep(0.15)
 
     def send(self, char: str):
         """Send a single command character to the Arduino."""
