@@ -3,6 +3,8 @@ package com.buggy.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -25,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.buggy.ui.bluetooth.BluetoothSppManager
 import com.buggy.ui.bluetooth.BluetoothConnectionStatus
@@ -73,6 +76,8 @@ fun MainScreen(modifier: Modifier = Modifier, bluetoothManager: IBluetoothManage
     val spokenText by speechRecognizer.spokenText.collectAsState()
     val clips by audioSessionManager.clips.collectAsState()
     val isConnecting = connectionState.status == BluetoothConnectionStatus.CONNECTING
+    var streamUrlInput by remember { mutableStateOf("http://192.168.1.100:8080/") }
+    var activeStreamUrl by remember { mutableStateOf(streamUrlInput) }
     
     LaunchedEffect(isListening) {
         if (isListening) {
@@ -166,19 +171,18 @@ fun MainScreen(modifier: Modifier = Modifier, bluetoothManager: IBluetoothManage
             }
         }
 
-        // Camera Feed Placeholder
-        Box(
+        CameraFeedPanel(
+            streamUrl = activeStreamUrl,
+            streamUrlInput = streamUrlInput,
+            onStreamUrlChange = { streamUrlInput = it },
+            onReload = {
+                activeStreamUrl = normalizeStreamUrl(streamUrlInput)
+                streamUrlInput = activeStreamUrl
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background(Color.DarkGray)
-        ) {
-            Text(
-                text = "Camera Feed Placeholder",
-                modifier = Modifier.align(Alignment.Center),
-                color = Color.White
-            )
-        }
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -252,6 +256,70 @@ fun MainScreen(modifier: Modifier = Modifier, bluetoothManager: IBluetoothManage
             onCommand = { cmd ->
                 val jsonCmd = "{\"type\": \"remote\", \"direction\": \"$cmd\"}"
                 bluetoothManager.sendCommand(jsonCmd)
+            }
+        )
+    }
+}
+
+private fun normalizeStreamUrl(value: String): String {
+    val trimmed = value.trim()
+    val withScheme = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        trimmed
+    } else {
+        "http://$trimmed"
+    }
+    return if (withScheme.endsWith("/")) withScheme else "$withScheme/"
+}
+
+@Composable
+fun CameraFeedPanel(
+    streamUrl: String,
+    streamUrlInput: String,
+    onStreamUrlChange: (String) -> Unit,
+    onReload: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = streamUrlInput,
+                onValueChange = onStreamUrlChange,
+                singleLine = true,
+                label = { Text("Camera URL") },
+                modifier = Modifier.weight(1f)
+            )
+            Button(onClick = onReload) {
+                Text("Reload")
+            }
+        }
+
+        AndroidView(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .background(Color.Black),
+            factory = { context ->
+                WebView(context).apply {
+                    webViewClient = WebViewClient()
+                    settings.javaScriptEnabled = false
+                    settings.loadWithOverviewMode = true
+                    settings.useWideViewPort = true
+                    settings.builtInZoomControls = false
+                    settings.displayZoomControls = false
+                    setBackgroundColor(android.graphics.Color.BLACK)
+                    loadUrl(streamUrl)
+                }
+            },
+            update = { webView ->
+                if (webView.url != streamUrl) {
+                    webView.loadUrl(streamUrl)
+                }
             }
         )
     }
