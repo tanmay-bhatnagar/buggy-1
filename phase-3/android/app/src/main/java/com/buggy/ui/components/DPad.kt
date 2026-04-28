@@ -1,28 +1,21 @@
 package com.buggy.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @Composable
 fun DPad(
@@ -55,7 +48,16 @@ fun DPad(
                 enabled = enabled,
                 onCommand = onCommand
             )
-            Spacer(modifier = Modifier.width(80.dp))
+            Spacer(modifier = Modifier.width(16.dp))
+            DPadButton(
+                icon = null,
+                contentDescription = "Stop",
+                command = "stop",
+                enabled = enabled,
+                isStop = true,
+                onCommand = onCommand
+            )
+            Spacer(modifier = Modifier.width(16.dp))
             DPadButton(
                 icon = Icons.Default.KeyboardArrowRight,
                 contentDescription = "Right",
@@ -77,47 +79,41 @@ fun DPad(
 
 @Composable
 fun DPadButton(
-    icon: ImageVector,
+    icon: ImageVector?,
     contentDescription: String,
     command: String,
     enabled: Boolean,
+    isStop: Boolean = false,
     onCommand: (String) -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .size(72.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary)
-            .pointerInput(enabled, command) {
-                detectTapGestures(
-                    onPress = {
-                        if (enabled) {
-                            coroutineScope {
-                                val repeatJob = launch {
-                                    while (true) {
-                                        onCommand(command)
-                                        delay(150)
-                                    }
-                                }
+    val buttonModifier = Modifier.size(72.dp)
+    val content: @Composable RowScope.() -> Unit = {
+        if (icon == null) {
+            Text(contentDescription.uppercase())
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(42.dp)
+            )
+        }
+    }
 
-                                try {
-                                    tryAwaitRelease()
-                                } finally {
-                                    repeatJob.cancel()
-                                    onCommand("stop")
-                                }
-                            }
-                        }
-                    }
-                )
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = Color.White,
-            modifier = Modifier.size(48.dp)
+    if (isStop) {
+        Button(
+            onClick = { onCommand(command) },
+            enabled = enabled,
+            modifier = buttonModifier,
+            contentPadding = PaddingValues(0.dp),
+            content = content
+        )
+    } else {
+        OutlinedButton(
+            onClick = { onCommand(command) },
+            enabled = enabled,
+            modifier = buttonModifier,
+            contentPadding = PaddingValues(0.dp),
+            content = content
         )
     }
 }
