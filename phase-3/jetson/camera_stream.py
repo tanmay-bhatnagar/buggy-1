@@ -51,6 +51,8 @@ class Camera:
     def wait_for_frame(self, last_frame: Optional[bytes], timeout: float = 2.0) -> Optional[bytes]:
         deadline = time.monotonic() + timeout
         with self.condition:
+            if self.latest_jpeg is not None and last_frame is None:
+                return self.latest_jpeg
             while self.running and self.latest_jpeg is last_frame:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:

@@ -48,6 +48,7 @@ except ImportError:
 RFCOMM_CHANNEL = 1          # RFCOMM channel (1 is standard for SPP)
 DEFAULT_SERIAL_PORT = "/dev/ttyACM0"
 BAUD_RATE = 115200
+HEARTBEAT_PERIOD_S = 0.2
 
 # Linux Bluetooth constants
 _AF_BLUETOOTH = 31
@@ -148,13 +149,22 @@ class ArduinoSerial:
 
     def send(self, char: str):
         """Send a single command character to the Arduino."""
+        self.send_line(char, log=True)
+
+    def heartbeat(self):
+        """Keep Phase-1 runtime firmware watchdog alive while the phone is connected."""
+        self.send_line("HB", log=False)
+
+    def send_line(self, line: str, log: bool = True):
         if self.dry_run:
-            print(f"   [DRY-RUN] → Arduino: '{char}'")
+            if log:
+                print(f"   [DRY-RUN] → Arduino: '{line}'")
             return
         try:
-            self.ser.write((char + "\n").encode())
+            self.ser.write((line + "\n").encode())
             self.ser.flush()
-            print(f"   → Arduino: '{char}'")
+            if log:
+                print(f"   → Arduino: '{line}'")
         except Exception as e:
             print(f"   ❌ Serial write error: {e}")
 
@@ -234,11 +244,17 @@ def run_server(arduino: ArduinoSerial, channel: int = RFCOMM_CHANNEL):
 
             print(f"   📱 Client connected: {client_info}")
             buffer = ""
+            next_heartbeat = 0.0
 
             while running:
                 try:
+                    now = time.monotonic()
+                    if now >= next_heartbeat:
+                        arduino.heartbeat()
+                        next_heartbeat = now + HEARTBEAT_PERIOD_S
+
                     # Use select for recv timeout too
-                    readable, _, _ = select.select([client_sock], [], [], 2.0)
+                    readable, _, _ = select.select([client_sock], [], [], 0.05)
                     if not readable:
                         continue  # no data yet
 

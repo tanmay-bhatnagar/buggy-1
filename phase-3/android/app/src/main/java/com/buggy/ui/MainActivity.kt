@@ -2,9 +2,9 @@ package com.buggy.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.os.Bundle
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.widget.ImageView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -35,6 +35,12 @@ import com.buggy.ui.audio.AudioSessionManager
 import com.buggy.ui.components.DPad
 import com.buggy.ui.speech.BuggySpeechRecognizer
 import com.buggy.ui.ui.theme.BuggyUITheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MainActivity : ComponentActivity() {
     // Jetson BT dongle MAC (from `hciconfig hci0` on Jetson)
@@ -321,26 +327,64 @@ fun CameraFeedPanel(
                 .border(1.dp, Color.DarkGray),
             contentAlignment = Alignment.Center
         ) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { context ->
-                    WebView(context).apply {
-                        webViewClient = WebViewClient()
-                        settings.javaScriptEnabled = false
-                        settings.loadWithOverviewMode = true
-                        settings.useWideViewPort = true
-                        settings.builtInZoomControls = false
-                        settings.displayZoomControls = false
-                        setBackgroundColor(android.graphics.Color.BLACK)
-                        loadUrl(streamUrl)
-                    }
-                },
-                update = { webView ->
-                    if (webView.url != streamUrl) {
-                        webView.loadUrl(streamUrl)
-                    }
-                }
-            )
+            SnapshotCameraImage(streamUrl = streamUrl)
         }
     }
+}
+
+@Composable
+private fun SnapshotCameraImage(streamUrl: String) {
+    val snapshotUrl = remember(streamUrl) { snapshotUrlFor(streamUrl) }
+    var imageView by remember { mutableStateOf<ImageView?>(null) }
+
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { context ->
+            ImageView(context).apply {
+                setBackgroundColor(android.graphics.Color.BLACK)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                imageView = this
+            }
+        },
+        update = { view ->
+            imageView = view
+        }
+    )
+
+    LaunchedEffect(snapshotUrl, imageView) {
+        val target = imageView ?: return@LaunchedEffect
+        while (isActive) {
+            val bitmap = withContext(Dispatchers.IO) {
+                fetchBitmap(snapshotUrl)
+            }
+            if (bitmap != null) {
+                target.setImageBitmap(bitmap)
+            }
+            delay(100)
+        }
+    }
+}
+
+private fun snapshotUrlFor(value: String): String {
+    val base = normalizeStreamUrl(value)
+    return when {
+        base.endsWith("/snapshot.jpg") -> base
+        base.endsWith("/stream/") -> base.removeSuffix("/stream/") + "/snapshot.jpg"
+        else -> base + "snapshot.jpg"
+    }
+}
+
+private fun fetchBitmap(url: String) = try {
+    val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+        connectTimeout = 700
+        readTimeout = 700
+        useCaches = false
+    }
+    connection.inputStream.use { input ->
+        BitmapFactory.decodeStream(input)
+    }.also {
+        connection.disconnect()
+    }
+} catch (_: Exception) {
+    null
 }
