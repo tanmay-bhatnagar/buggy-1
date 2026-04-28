@@ -17,6 +17,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -63,9 +64,12 @@ class BluetoothSppManager(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var socket: BluetoothSocket? = null
+    private var inputStream: InputStream? = null
     private var outputStream: OutputStream? = null
     private var connectJob: Job? = null
+    private var readJob: Job? = null
     private val isConnecting = AtomicBoolean(false)
+    private val writeLock = Any()
 
     // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -98,16 +102,14 @@ class BluetoothSppManager(
         scope.launch {
             try {
                 // Append newline so the Jetson readline() call terminates cleanly
-                outputStream?.write((command + "\n").toByteArray(Charsets.UTF_8))
-                outputStream?.flush()
+                synchronized(writeLock) {
+                    outputStream?.write((command + "\n").toByteArray(Charsets.UTF_8))
+                    outputStream?.flush()
+                }
                 Log.d(TAG, "Sent: $command")
             } catch (e: IOException) {
                 Log.e(TAG, "Write failed: ${e.message}")
-                _isConnected.value = false
-                _connectionState.value = BluetoothConnectionState(
-                    BluetoothConnectionStatus.FAILED,
-                    "Write failed: ${e.message ?: "socket error"}"
-                )
+                markDisconnected("Write failed: ${e.message ?: "socket error"}")
                 // Attempt reconnect after a write failure
                 if (isConnecting.compareAndSet(false, true)) {
                     connectWithRetry()
@@ -209,8 +211,10 @@ class BluetoothSppManager(
                 candidate = socketFactory()
                 candidate.connect()
                 socket = candidate
+                inputStream = candidate.inputStream
                 outputStream = candidate.outputStream
                 _isConnected.value = true
+                startReader()
                 Log.d(TAG, "$label connected")
                 return null
             } catch (e: Exception) {
@@ -232,13 +236,62 @@ class BluetoothSppManager(
         return method.invoke(device, channel) as BluetoothSocket
     }
 
+    private fun startReader() {
+        readJob?.cancel()
+        readJob = scope.launch {
+            val buffer = ByteArray(256)
+            val lineBuffer = StringBuilder()
+            try {
+                while (isActive && _isConnected.value) {
+                    val count = inputStream?.read(buffer) ?: -1
+                    if (count < 0) {
+                        markDisconnected("Jetson disconnected")
+                        break
+                    }
+                    if (count == 0) continue
+
+                    val text = String(buffer, 0, count, Charsets.UTF_8)
+                    for (char in text) {
+                        if (char == '\n') {
+                            val line = lineBuffer.toString().trim()
+                            lineBuffer.clear()
+                            if (line.isNotEmpty()) {
+                                Log.d(TAG, "Received: $line")
+                            }
+                        } else {
+                            lineBuffer.append(char)
+                        }
+                    }
+                }
+            } catch (e: IOException) {
+                if (_isConnected.value) {
+                    markDisconnected("Jetson link lost: ${e.message ?: "socket error"}")
+                }
+            }
+        }
+    }
+
+    private fun markDisconnected(message: String) {
+        Log.w(TAG, message)
+        _isConnected.value = false
+        _connectionState.value = BluetoothConnectionState(
+            BluetoothConnectionStatus.FAILED,
+            message
+        )
+        closeSocket()
+    }
+
     private fun closeSocket() {
         try {
+            readJob?.cancel()
+            inputStream?.close()
             outputStream?.close()
             socket?.close()
         } catch (e: IOException) {
             Log.w(TAG, "Error closing socket: ${e.message}")
         } finally {
+            readJob = null
+            inputStream = null
             outputStream = null
             socket = null
         }

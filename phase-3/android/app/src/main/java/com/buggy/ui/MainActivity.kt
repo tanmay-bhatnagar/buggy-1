@@ -172,6 +172,7 @@ fun MainScreen(modifier: Modifier = Modifier, bluetoothManager: IBluetoothManage
             )
 
             ControlPanel(
+                isConnected = isConnected,
                 isListening = isListening,
                 spokenText = spokenText,
                 hasRecordAudioPermission = hasRecordAudioPermission,
@@ -251,6 +252,7 @@ private fun TopControlBar(
 
 @Composable
 private fun ControlPanel(
+    isConnected: Boolean,
     isListening: Boolean,
     spokenText: String,
     hasRecordAudioPermission: Boolean,
@@ -266,7 +268,7 @@ private fun ControlPanel(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = "Manual Override", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(8.dp))
-            DPad(onCommand = onCommand)
+            DPad(enabled = isConnected, onCommand = onCommand)
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {

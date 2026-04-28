@@ -14,25 +14,33 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun DPad(
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onCommand: (command: String) -> Unit
 ) {
     Column(
-        modifier = modifier.padding(16.dp),
+        modifier = modifier
+            .padding(16.dp)
+            .alpha(if (enabled) 1f else 0.45f),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         DPadButton(
             icon = Icons.Default.KeyboardArrowUp,
             contentDescription = "Forward",
             command = "forward",
+            enabled = enabled,
             onCommand = onCommand
         )
         
@@ -44,6 +52,7 @@ fun DPad(
                 icon = Icons.Default.KeyboardArrowLeft,
                 contentDescription = "Left",
                 command = "left",
+                enabled = enabled,
                 onCommand = onCommand
             )
             Spacer(modifier = Modifier.width(80.dp))
@@ -51,6 +60,7 @@ fun DPad(
                 icon = Icons.Default.KeyboardArrowRight,
                 contentDescription = "Right",
                 command = "right",
+                enabled = enabled,
                 onCommand = onCommand
             )
         }
@@ -59,6 +69,7 @@ fun DPad(
             icon = Icons.Default.KeyboardArrowDown,
             contentDescription = "Reverse",
             command = "reverse",
+            enabled = enabled,
             onCommand = onCommand
         )
     }
@@ -69,6 +80,7 @@ fun DPadButton(
     icon: ImageVector,
     contentDescription: String,
     command: String,
+    enabled: Boolean,
     onCommand: (String) -> Unit
 ) {
     Box(
@@ -76,12 +88,26 @@ fun DPadButton(
             .size(72.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.primary)
-            .pointerInput(Unit) {
+            .pointerInput(enabled, command) {
                 detectTapGestures(
                     onPress = {
-                        onCommand(command)
-                        val released = tryAwaitRelease()
-                        onCommand("stop")
+                        if (enabled) {
+                            coroutineScope {
+                                val repeatJob = launch {
+                                    while (true) {
+                                        onCommand(command)
+                                        delay(150)
+                                    }
+                                }
+
+                                try {
+                                    tryAwaitRelease()
+                                } finally {
+                                    repeatJob.cancel()
+                                    onCommand("stop")
+                                }
+                            }
+                        }
                     }
                 )
             },
