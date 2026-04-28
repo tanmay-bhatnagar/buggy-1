@@ -11,9 +11,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -74,9 +73,8 @@ fun MainScreen(modifier: Modifier = Modifier, bluetoothManager: IBluetoothManage
     val connectionState by bluetoothManager.connectionState.collectAsState()
     val isListening by speechRecognizer.isListening.collectAsState()
     val spokenText by speechRecognizer.spokenText.collectAsState()
-    val clips by audioSessionManager.clips.collectAsState()
     val isConnecting = connectionState.status == BluetoothConnectionStatus.CONNECTING
-    var streamUrlInput by remember { mutableStateOf("http://192.168.1.100:8080/") }
+    var streamUrlInput by remember { mutableStateOf("http://192.168.1.4:8080/") }
     var activeStreamUrl by remember { mutableStateOf(streamUrlInput) }
     
     LaunchedEffect(isListening) {
@@ -119,144 +117,175 @@ fun MainScreen(modifier: Modifier = Modifier, bluetoothManager: IBluetoothManage
         }
     )
 
+    fun connectOrDisconnect() {
+        if (isConnected || isConnecting) {
+            bluetoothManager.disconnect()
+        } else if (!hasBluetoothPermission && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            btPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.BLUETOOTH_SCAN
+                )
+            )
+        } else {
+            bluetoothManager.connect()
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Top Bar Area: Status and Connect button
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Status: ${connectionState.message}",
-                color = when (connectionState.status) {
-                    BluetoothConnectionStatus.CONNECTED -> Color(0xFF4CAF50)
-                    BluetoothConnectionStatus.CONNECTING -> Color(0xFFFFC107)
-                    BluetoothConnectionStatus.FAILED -> Color(0xFFFF7043)
-                    BluetoothConnectionStatus.DISCONNECTED -> Color(0xFFF44336)
-                },
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
-
-            Button(onClick = {
-                if (isConnected || isConnecting) {
-                    bluetoothManager.disconnect()
-                } else {
-                    if (!hasBluetoothPermission && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                        btPermissionLauncher.launch(
-                            arrayOf(
-                                Manifest.permission.BLUETOOTH_CONNECT,
-                                Manifest.permission.BLUETOOTH_SCAN
-                            )
-                        )
-                    } else {
-                        bluetoothManager.connect()
-                    }
-                }
-            }) {
-                Text(
-                    when {
-                        isConnected -> "Disconnect"
-                        isConnecting -> "Cancel"
-                        else -> "Connect"
-                    }
-                )
-            }
-        }
-
-        CameraFeedPanel(
-            streamUrl = activeStreamUrl,
+        TopControlBar(
+            statusText = connectionState.message,
+            status = connectionState.status,
+            isConnected = isConnected,
+            isConnecting = isConnecting,
             streamUrlInput = streamUrlInput,
             onStreamUrlChange = { streamUrlInput = it },
             onReload = {
                 activeStreamUrl = normalizeStreamUrl(streamUrlInput)
                 streamUrlInput = activeStreamUrl
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
+            onConnectClick = { connectOrDisconnect() }
         )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // STT Logic
-        Text(
-            text = "Voice Command", 
-            fontSize = 20.sp, 
-            fontWeight = FontWeight.SemiBold
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = if (isListening) "Listening..." else spokenText.ifEmpty { "Press mic to speak" },
-            color = if (isListening) MaterialTheme.colorScheme.primary else Color.LightGray,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.height(48.dp)
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            FloatingActionButton(
-                onClick = {
+            CameraFeedPanel(
+                streamUrl = activeStreamUrl,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            )
+
+            ControlPanel(
+                isListening = isListening,
+                spokenText = spokenText,
+                hasRecordAudioPermission = hasRecordAudioPermission,
+                onMicClick = {
                     if (!hasRecordAudioPermission) {
                         permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    } else if (isListening) {
+                        speechRecognizer.stopListening()
                     } else {
-                        if (isListening) {
-                            speechRecognizer.stopListening()
-                        } else {
-                            speechRecognizer.startListening()
-                        }
+                        speechRecognizer.startListening()
                     }
                 },
+                onCommand = { cmd ->
+                    val jsonCmd = "{\"type\": \"remote\", \"direction\": \"$cmd\"}"
+                    bluetoothManager.sendCommand(jsonCmd)
+                },
+                modifier = Modifier
+                    .widthIn(min = 300.dp, max = 380.dp)
+                    .fillMaxHeight()
+            )
+        }
+    }
+}
+
+@Composable
+private fun TopControlBar(
+    statusText: String,
+    status: BluetoothConnectionStatus,
+    isConnected: Boolean,
+    isConnecting: Boolean,
+    streamUrlInput: String,
+    onStreamUrlChange: (String) -> Unit,
+    onReload: () -> Unit,
+    onConnectClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Status: $statusText",
+            color = when (status) {
+                BluetoothConnectionStatus.CONNECTED -> Color(0xFF4CAF50)
+                BluetoothConnectionStatus.CONNECTING -> Color(0xFFFFC107)
+                BluetoothConnectionStatus.FAILED -> Color(0xFFFF7043)
+                BluetoothConnectionStatus.DISCONNECTED -> Color(0xFFF44336)
+            },
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            modifier = Modifier.widthIn(min = 260.dp, max = 420.dp)
+        )
+
+        OutlinedTextField(
+            value = streamUrlInput,
+            onValueChange = onStreamUrlChange,
+            singleLine = true,
+            label = { Text("Camera URL") },
+            modifier = Modifier.weight(1f)
+        )
+
+        Button(onClick = onReload) {
+            Text("Reload")
+        }
+
+        Button(onClick = onConnectClick) {
+            Text(
+                when {
+                    isConnected -> "Disconnect"
+                    isConnecting -> "Cancel"
+                    else -> "Connect"
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ControlPanel(
+    isListening: Boolean,
+    spokenText: String,
+    hasRecordAudioPermission: Boolean,
+    onMicClick: () -> Unit,
+    onCommand: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = "Manual Override", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(8.dp))
+            DPad(onCommand = onCommand)
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = "Voice Command", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = if (isListening) "Listening..." else spokenText.ifEmpty { "Press mic to speak" },
+                color = if (isListening) MaterialTheme.colorScheme.primary else Color.LightGray,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.height(48.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FloatingActionButton(
+                onClick = onMicClick,
                 shape = CircleShape,
                 containerColor = if (isListening) Color.Red else MaterialTheme.colorScheme.primary
             ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = "Mic", tint = Color.White)
             }
         }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("Session Audio Clips (Latest First)", fontSize = 14.sp, color = Color.Gray)
-        Spacer(modifier = Modifier.height(8.dp))
-        if (clips.isNotEmpty()) {
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 16.dp)
-            ) {
-                items(clips) { clipFile ->
-                    val clipNumber = clipFile.name.substringBefore(".3gp")
-                    Button(onClick = { audioSessionManager.playClip(clipFile) {} }) {
-                        Text(clipNumber)
-                    }
-                }
-            }
-        } else {
-            Text("No audio recorded in this session yet.", fontSize = 14.sp, color = Color.DarkGray)
-        }
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Joystick Area
-        Text(text = "Manual Override", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(modifier = Modifier.height(8.dp))
-
-        DPad(
-            onCommand = { cmd ->
-                val jsonCmd = "{\"type\": \"remote\", \"direction\": \"$cmd\"}"
-                bluetoothManager.sendCommand(jsonCmd)
-            }
+        Text(
+            text = if (hasRecordAudioPermission) "Mic ready" else "Mic permission needed",
+            fontSize = 13.sp,
+            color = Color.Gray
         )
     }
 }
@@ -274,53 +303,44 @@ private fun normalizeStreamUrl(value: String): String {
 @Composable
 fun CameraFeedPanel(
     streamUrl: String,
-    streamUrlInput: String,
-    onStreamUrlChange: (String) -> Unit,
-    onReload: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = streamUrlInput,
-                onValueChange = onStreamUrlChange,
-                singleLine = true,
-                label = { Text("Camera URL") },
-                modifier = Modifier.weight(1f)
-            )
-            Button(onClick = onReload) {
-                Text("Reload")
-            }
-        }
+        Text(
+            text = "Camera Feed",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
 
-        AndroidView(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background(Color.Black),
-            factory = { context ->
-                WebView(context).apply {
-                    webViewClient = WebViewClient()
-                    settings.javaScriptEnabled = false
-                    settings.loadWithOverviewMode = true
-                    settings.useWideViewPort = true
-                    settings.builtInZoomControls = false
-                    settings.displayZoomControls = false
-                    setBackgroundColor(android.graphics.Color.BLACK)
-                    loadUrl(streamUrl)
+                .background(Color.Black)
+                .border(1.dp, Color.DarkGray),
+            contentAlignment = Alignment.Center
+        ) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    WebView(context).apply {
+                        webViewClient = WebViewClient()
+                        settings.javaScriptEnabled = false
+                        settings.loadWithOverviewMode = true
+                        settings.useWideViewPort = true
+                        settings.builtInZoomControls = false
+                        settings.displayZoomControls = false
+                        setBackgroundColor(android.graphics.Color.BLACK)
+                        loadUrl(streamUrl)
+                    }
+                },
+                update = { webView ->
+                    if (webView.url != streamUrl) {
+                        webView.loadUrl(streamUrl)
+                    }
                 }
-            },
-            update = { webView ->
-                if (webView.url != streamUrl) {
-                    webView.loadUrl(streamUrl)
-                }
-            }
-        )
+            )
+        }
     }
 }
