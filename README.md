@@ -2,6 +2,8 @@
 
 A phased, Jetson-powered mobile robotics platform that combines embedded locomotion, custom person detection and tracking, edge vision deployment, and an Android remote-control interface.
 
+[Tanmay Bhatnagar on LinkedIn](https://www.linkedin.com/in/tanmay-bhatnagar/)
+
 This is a documented hardware prototype, not a finished autonomous product. Each phase keeps its own code, setup notes, and limitations close to the implementation.
 
 ## What is in the repository
