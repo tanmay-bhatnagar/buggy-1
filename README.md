@@ -2,8 +2,6 @@
 
 A phased, Jetson-powered mobile robotics platform that combines embedded locomotion, custom person detection and tracking, edge vision deployment, and an Android remote-control interface.
 
-[Tanmay Bhatnagar on LinkedIn](https://www.linkedin.com/in/tanmay-bhatnagar/)
-
 This is a documented hardware prototype, not a finished autonomous product. Each phase keeps its own code, setup notes, and limitations close to the implementation.
 
 ## What is in the repository
@@ -60,4 +58,4 @@ This repository controls real motors. Start with the wheels elevated, maintain a
 
 ## History and attribution
 
-All project work and commits in this repository are by [Tanmay Bhatnagar](https://github.com/tanmay-bhatnagar). The commit history is retained as an engineering record rather than squashed: it documents the incremental hardware and software decisions behind the current prototype.
+All project work and commits in this repository are by [Tanmay Bhatnagar](https://github.com/tanmay-bhatnagar). Connect on [LinkedIn](https://www.linkedin.com/in/tanmay-bhatnagar/). The commit history is retained as an engineering record rather than squashed: it documents the incremental hardware and software decisions behind the current prototype.
