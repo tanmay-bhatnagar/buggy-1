@@ -18,6 +18,34 @@ Android app ── Bluetooth Classic (SPP) ──> Jetson Orin Nano ── USB s
 | [Phase 2](phase-2/README.md) | Custom YOLO follow-me perception | YOLO11n V1 was trained and validated; Jetson/TensorRT and tracker experiments are included. Closed-loop following remains in progress. |
 | [Phase 3](phase-3/README.md) | Android remote control and video | Bluetooth SPP D-pad control and a raw MJPEG camera path are implemented. Voice routing and vision-overlay control are not integrated. |
 
+## Demo videos
+
+A four-stage visual record of the buggy, from reactive obstacle avoidance to mobile control and live video. The players below are GitHub-hosted media; each source MP4 is also versioned in this repository.
+
+### 1. Phase 1 — Ultrasonic Obstacle Avoidance
+
+https://github.com/user-attachments/assets/0aa245a7-9e90-41c5-91b9-29c9a387a10f
+
+[Source video](assets/demos/phase-1-ultrasonic-obstacle-avoidance.mp4)
+
+### 2. Phase 2 — Custom YOLOv11 Person Identification
+
+https://github.com/user-attachments/assets/cafec79e-1614-40f2-bee0-a6e2b6d892eb
+
+[Source video](assets/demos/phase-2-yolo-person-identification.mp4)
+
+### 3. Jetson Deployment — TensorRT YOLO and Tracking
+
+https://github.com/user-attachments/assets/48a36fd5-cb61-4842-ba54-a1801ea3e6bb
+
+[Source video](assets/demos/jetson-tensorrt-yolo-tracking.mp4)
+
+### 4. Phase 3 — Android Remote Control and Live Camera
+
+https://github.com/user-attachments/assets/1fc9c4f3-b261-4a99-ac7f-0eafc91698f8
+
+[Source video](assets/demos/phase-3-android-control-live-camera.mp4)
+
 ## Technical highlights
 
 - **Embedded control:** Jetson Python state machine communicates with modular Arduino firmware over USB serial; the firmware includes a heartbeat watchdog that stops motors on link loss.
